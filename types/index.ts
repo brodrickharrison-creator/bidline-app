@@ -133,8 +133,10 @@ export interface ExternalInvoiceUpload {
 export interface Contact {
   id: string;
   name: string;
-  email: string | null;
+  email: string;
   phone: string | null;
+  company: string | null;
+  role: string | null;
   userId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -149,8 +151,10 @@ export interface ContactWithStats extends Contact {
 
 export interface CreateContactInput {
   name: string;
-  email?: string;
+  email: string;
   phone?: string;
+  company?: string;
+  role?: string;
 }
 
 // ============================================================================

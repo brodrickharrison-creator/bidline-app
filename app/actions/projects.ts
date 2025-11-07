@@ -24,13 +24,14 @@ export async function createProject(formData: {
   try {
     // Calculate total budget from all line items
     const totalBudget = formData.budgetLines.reduce((sum, line) => {
+      const quantity = line.quantity || 1; // Default to 1 if blank/0
       const days = line.days || 0;
       const rate = line.rate || 0;
       const ot1_5 = line.ot1_5 || 0;
       const ot2 = line.ot2 || 0;
       const ot2_5 = line.ot2_5 || 0;
 
-      const estimate = (days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
+      const estimate = (quantity * days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
       return sum + estimate;
     }, 0);
 
@@ -63,19 +64,20 @@ export async function createProject(formData: {
         userId,
         budgetLines: {
           create: formData.budgetLines.map((line) => {
+            const quantity = line.quantity || 1; // Default to 1 if blank/0
             const days = line.days || 0;
             const rate = line.rate || 0;
             const ot1_5 = line.ot1_5 || 0;
             const ot2 = line.ot2 || 0;
             const ot2_5 = line.ot2_5 || 0;
 
-            const estimate = (days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
+            const estimate = (quantity * days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
 
             return {
               category: line.category,
               lineNumber: line.lineNumber,
               name: line.name,
-              quantity: line.quantity,
+              quantity,
               days,
               rate,
               ot1_5,
@@ -296,5 +298,162 @@ export async function updateRunningAmount(budgetLineId: string, runningAmount: n
   } catch (error) {
     console.error("Failed to update running amount:", error);
     return { success: false, error: "Failed to update running amount" };
+  }
+}
+
+export async function updateBudgetLineFields(
+  budgetLineId: string,
+  fields: {
+    name?: string;
+    quantity?: number;
+    days?: number;
+    rate?: number;
+    ot1_5?: number;
+    ot2?: number;
+    ot2_5?: number;
+  }
+) {
+  try {
+    // Calculate new estimate based on updated fields
+    const currentLine = await prisma.budgetLine.findUnique({
+      where: { id: budgetLineId },
+    });
+
+    if (!currentLine) {
+      return { success: false, error: "Budget line not found" };
+    }
+
+    // Merge current values with updates
+    const quantity = fields.quantity !== undefined ? fields.quantity : Number(currentLine.quantity) || 1;
+    const days = fields.days !== undefined ? fields.days : Number(currentLine.days) || 0;
+    const rate = fields.rate !== undefined ? fields.rate : Number(currentLine.rate) || 0;
+    const ot1_5 = fields.ot1_5 !== undefined ? fields.ot1_5 : Number(currentLine.ot1_5) || 0;
+    const ot2 = fields.ot2 !== undefined ? fields.ot2 : Number(currentLine.ot2) || 0;
+    const ot2_5 = fields.ot2_5 !== undefined ? fields.ot2_5 : Number(currentLine.ot2_5) || 0;
+
+    // Calculate new estimate
+    const estimate = (quantity * days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
+
+    // Update the budget line
+    const budgetLineRaw = await prisma.budgetLine.update({
+      where: { id: budgetLineId },
+      data: {
+        name: fields.name !== undefined ? fields.name : currentLine.name,
+        quantity: fields.quantity !== undefined ? fields.quantity : currentLine.quantity,
+        days: fields.days !== undefined ? fields.days : currentLine.days,
+        rate: fields.rate !== undefined ? fields.rate : currentLine.rate,
+        ot1_5: fields.ot1_5 !== undefined ? fields.ot1_5 : currentLine.ot1_5,
+        ot2: fields.ot2 !== undefined ? fields.ot2 : currentLine.ot2,
+        ot2_5: fields.ot2_5 !== undefined ? fields.ot2_5 : currentLine.ot2_5,
+        estimate,
+      },
+      include: {
+        project: true,
+      },
+    });
+
+    // Update project total budget
+    const allLines = await prisma.budgetLine.findMany({
+      where: { projectId: budgetLineRaw.projectId },
+    });
+
+    const totalBudget = allLines.reduce((sum, line) => sum + Number(line.estimate), 0);
+
+    await prisma.project.update({
+      where: { id: budgetLineRaw.projectId },
+      data: { totalBudget },
+    });
+
+    // Revalidate project pages
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${budgetLineRaw.projectId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update budget line fields:", error);
+    return { success: false, error: "Failed to update budget line fields" };
+  }
+}
+
+export async function addBudgetLine(
+  projectId: string,
+  category: "PRE_PRODUCTION" | "PRODUCTION" | "POST_PRODUCTION"
+) {
+  try {
+    // Get the highest line number for this project
+    const existingLines = await prisma.budgetLine.findMany({
+      where: { projectId },
+      orderBy: { lineNumber: "desc" },
+      take: 1,
+    });
+
+    const nextLineNumber = existingLines.length > 0 ? existingLines[0].lineNumber + 1 : 1;
+
+    // Create new budget line with default values
+    await prisma.budgetLine.create({
+      data: {
+        projectId,
+        category,
+        lineNumber: nextLineNumber,
+        name: "New Line Item",
+        quantity: 0,
+        days: 0,
+        rate: 0,
+        ot1_5: 0,
+        ot2: 0,
+        ot2_5: 0,
+        estimate: 0,
+        actualSpent: 0,
+      },
+    });
+
+    // Revalidate project pages
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${projectId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to add budget line:", error);
+    return { success: false, error: "Failed to add budget line" };
+  }
+}
+
+export async function deleteProject(projectId: string) {
+  try {
+    // Delete the project (cascade will delete budget lines and invoices)
+    await prisma.project.delete({
+      where: { id: projectId },
+    });
+
+    // Revalidate projects page
+    revalidatePath("/projects");
+    revalidatePath("/dashboard");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to delete project:", error);
+    return { success: false, error: "Failed to delete project" };
+  }
+}
+
+export async function updateProjectStatus(
+  projectId: string,
+  status: "PLANNING" | "LIVE" | "COMPLETED" | "ARCHIVED"
+) {
+  try {
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { status },
+    });
+
+    // Revalidate projects page
+    revalidatePath("/projects");
+    revalidatePath("/dashboard");
+    revalidatePath(`/projects/${projectId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update project status:", error);
+    return { success: false, error: "Failed to update project status" };
   }
 }

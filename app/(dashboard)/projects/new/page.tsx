@@ -1,8 +1,8 @@
 "use client";
 
+import React, { useState } from "react";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
 import { createProject, type BudgetLineInput } from "@/app/actions/projects";
 import { useRouter } from "next/navigation";
 
@@ -32,7 +32,8 @@ const defaultLines: Omit<BudgetLine, "id">[] = [
 ];
 
 function calculateEstimate(line: BudgetLine): number {
-  const baseAmount = line.days * line.rate;
+  const quantity = line.quantity || 1; // Default to 1 if blank/0
+  const baseAmount = quantity * line.days * line.rate;
   const ot1_5Amount = line.ot1_5 * line.rate * 1.5;
   const ot2Amount = line.ot2 * line.rate * 2;
   const ot2_5Amount = line.ot2_5 * line.rate * 2.5;
@@ -51,9 +52,16 @@ export default function NewProjectPage() {
 
   const updateLine = (id: string, field: keyof BudgetLine, value: string | number) => {
     setBudgetLines((lines) =>
-      lines.map((line) =>
-        line.id === id ? { ...line, [field]: typeof value === "string" ? parseFloat(value) || 0 : value } : line
-      )
+      lines.map((line) => {
+        if (line.id !== id) return line;
+
+        // Handle name field as string, numeric fields as numbers
+        if (field === "name") {
+          return { ...line, [field]: value };
+        } else {
+          return { ...line, [field]: typeof value === "string" ? parseFloat(value) || 0 : value };
+        }
+      })
     );
   };
 
@@ -174,104 +182,131 @@ export default function NewProjectPage() {
 
           {/* Budget Breakdown */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Budget Breakdown</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Budget Breakdown</h2>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    addLine(e.target.value as BudgetLine["category"]);
+                    e.target.value = ""; // Reset dropdown
+                  }
+                }}
+                className="text-sm border border-gray-300 rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22M6%208l4%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25em] bg-[right_0.5rem_center] bg-no-repeat"
+              >
+                <option value="">+ Add Line</option>
+                <option value="PRE_PRODUCTION">Pre-Production</option>
+                <option value="PRODUCTION">Production</option>
+                <option value="POST_PRODUCTION">Post-Production</option>
+              </select>
+            </div>
 
-            {/* Budget Tables by Category */}
-            {(["PRE_PRODUCTION", "PRODUCTION", "POST_PRODUCTION"] as const).map((category) => {
-              const categoryLabel = category.replace("_", "-").toLowerCase().split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-              const lines = groupedLines[category];
+            {/* Unified Spreadsheet Table */}
+            <div className="overflow-hidden border border-gray-300 rounded-lg">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                <thead className="bg-gray-100 border-b border-gray-300">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-700 w-12 border-r border-gray-300"></th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-700 border-r border-gray-300"></th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">No</th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">Days</th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-24 border-r border-gray-300">Rate</th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">1.5 OT</th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2 OT</th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2.5 OT</th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-700 w-32 border-r border-gray-300">Estimate</th>
+                    <th className="px-3 py-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(["PRE_PRODUCTION", "PRODUCTION", "POST_PRODUCTION"] as const).map((category, catIndex) => {
+                    const categoryLabel = category.replace("_", "-").toLowerCase().split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+                    const lines = groupedLines[category];
+                    const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
 
-              return (
-                <div key={category} className="mb-8">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-semibold text-gray-700">{categoryLabel} Labor</h3>
-                    <button
-                      type="button"
-                      onClick={() => addLine(category)}
-                      className="text-sm text-green-600 hover:text-green-700 flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Line
-                    </button>
-                  </div>
-                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-3 py-2 text-left font-medium text-gray-700 w-8">#</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-700">Item</th>
-                          <th className="px-3 py-2 text-center font-medium text-gray-700 w-20">Days</th>
-                          <th className="px-3 py-2 text-center font-medium text-gray-700 w-24">Rate</th>
-                          <th className="px-3 py-2 text-center font-medium text-gray-700 w-20">1.5 OT</th>
-                          <th className="px-3 py-2 text-center font-medium text-gray-700 w-20">2 OT</th>
-                          <th className="px-3 py-2 text-center font-medium text-gray-700 w-20">2.5 OT</th>
-                          <th className="px-3 py-2 text-right font-medium text-gray-700 w-28">Estimate</th>
-                          <th className="px-3 py-2 w-10"></th>
+                    return (
+                      <React.Fragment key={category}>
+                        {/* Category Header Row */}
+                        <tr className="bg-gray-50 border-t border-gray-300">
+                          <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
+                          <td colSpan={9} className="px-3 py-2 font-semibold text-gray-700">
+                            {categoryLabel} Labor
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {lines.map((line) => (
-                          <tr key={line.id} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 text-gray-500 text-center">{line.lineNumber}</td>
-                            <td className="px-3 py-2">
+
+                        {/* Line Items */}
+                        {lines.map((line, lineIndex) => (
+                          <tr key={line.id} className="border-t border-gray-200 hover:bg-gray-50">
+                            <td className="px-3 py-2 text-gray-500 text-center border-r border-gray-300">{line.lineNumber}</td>
+                            <td className="px-3 py-2 border-r border-gray-300">
                               <input
                                 type="text"
                                 value={line.name}
                                 onChange={(e) => updateLine(line.id, "name", e.target.value)}
-                                className="w-full border-0 bg-transparent focus:ring-0 p-0"
+                                className="w-full border-0 bg-transparent focus:ring-0 p-0 text-sm"
                               />
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 border-r border-gray-300">
                               <input
                                 type="number"
-                                value={line.days || ""}
-                                onChange={(e) => updateLine(line.id, "days", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0"
-                                min="0"
-                                step="0.5"
-                              />
-                            </td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                value={line.rate || ""}
-                                onChange={(e) => updateLine(line.id, "rate", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0"
+                                value={line.quantity || ""}
+                                onChange={(e) => updateLine(line.id, "quantity", e.target.value)}
+                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
                                 min="0"
                                 step="1"
                               />
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 border-r border-gray-300">
+                              <input
+                                type="number"
+                                value={line.days || ""}
+                                onChange={(e) => updateLine(line.id, "days", e.target.value)}
+                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                min="0"
+                                step="0.5"
+                              />
+                            </td>
+                            <td className="px-3 py-2 border-r border-gray-300">
+                              <input
+                                type="number"
+                                value={line.rate || ""}
+                                onChange={(e) => updateLine(line.id, "rate", e.target.value)}
+                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                min="0"
+                                step="1"
+                              />
+                            </td>
+                            <td className="px-3 py-2 border-r border-gray-300">
                               <input
                                 type="number"
                                 value={line.ot1_5 || ""}
                                 onChange={(e) => updateLine(line.id, "ot1_5", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0"
+                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
                                 min="0"
                                 step="0.5"
                               />
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 border-r border-gray-300">
                               <input
                                 type="number"
                                 value={line.ot2 || ""}
                                 onChange={(e) => updateLine(line.id, "ot2", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0"
+                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
                                 min="0"
                                 step="0.5"
                               />
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 border-r border-gray-300">
                               <input
                                 type="number"
                                 value={line.ot2_5 || ""}
                                 onChange={(e) => updateLine(line.id, "ot2_5", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0"
+                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
                                 min="0"
                                 step="0.5"
                               />
                             </td>
-                            <td className="px-3 py-2 text-right font-medium">
+                            <td className="px-3 py-2 text-right font-medium text-sm border-r border-gray-300">
                               ${calculateEstimate(line).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                             <td className="px-3 py-2">
@@ -286,12 +321,13 @@ export default function NewProjectPage() {
                             </td>
                           </tr>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+              </div>
+            </div>
           </div>
 
           {/* Error Message */}

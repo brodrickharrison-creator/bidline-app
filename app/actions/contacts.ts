@@ -5,8 +5,10 @@ import { revalidatePath } from "next/cache";
 
 export async function createContact(data: {
   name: string;
-  email?: string;
+  email: string;
   phone?: string;
+  company?: string;
+  role?: string;
 }) {
   try {
     // For now, use temp user ID
@@ -17,6 +19,8 @@ export async function createContact(data: {
         name: data.name,
         email: data.email,
         phone: data.phone,
+        company: data.company,
+        role: data.role,
         userId,
       },
     });
@@ -77,6 +81,8 @@ export async function updateContact(
     name?: string;
     email?: string;
     phone?: string;
+    company?: string;
+    role?: string;
   }
 ) {
   try {

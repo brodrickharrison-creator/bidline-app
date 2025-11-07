@@ -1,11 +1,13 @@
 "use client";
 
-import { ArrowLeft, Share2, Check, X } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { ArrowLeft, Share2, Check, X, Plus, Download } from "lucide-react";
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { getProjectById, assignBudgetLinePayee, updateRunningAmount } from "@/app/actions/projects";
+import { getProjectById, assignBudgetLinePayee, updateRunningAmount, updateBudgetLineFields, addBudgetLine } from "@/app/actions/projects";
 import { getContacts } from "@/app/actions/contacts";
 import { notFound, useParams, useSearchParams } from "next/navigation";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -48,6 +50,99 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const handleExportBid = () => {
+    if (!project) return;
+
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.text("Project Estimate", 14, 20);
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Project: ${project.name}`, 14, 30);
+    if (project.clientName) {
+      doc.text(`Client: ${project.clientName}`, 14, 36);
+    }
+    doc.text(`Prepared by: BidLine`, 14, project.clientName ? 42 : 36);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, project.clientName ? 48 : 42);
+
+    let yPosition = project.clientName ? 58 : 52;
+
+    // Categories
+    const categories = [
+      { key: "PRE_PRODUCTION", label: "Pre-Production Labor" },
+      { key: "PRODUCTION", label: "Production Labor" },
+      { key: "POST_PRODUCTION", label: "Post-Production Labor" },
+    ];
+
+    categories.forEach((category) => {
+      const lines = groupedLines[category.key as keyof typeof groupedLines];
+      if (lines.length === 0) return;
+
+      // Category heading
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(category.label, 14, yPosition);
+      yPosition += 6;
+
+      // Table data
+      const tableData = lines.map((line: any) => [
+        line.lineNumber,
+        line.name,
+        Number(line.quantity) || "-",
+        Number(line.days) || "-",
+        `$${Number(line.rate).toLocaleString()}`,
+        Number(line.ot1_5) || "-",
+        Number(line.ot2) || "-",
+        Number(line.ot2_5) || "-",
+        `$${Number(line.estimate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      ]);
+
+      autoTable(doc, {
+        startY: yPosition,
+        head: [["#", "Item", "No", "Days", "Rate", "1.5 OT", "2 OT", "2.5 OT", "Estimate"]],
+        body: tableData,
+        theme: "grid",
+        headStyles: {
+          fillColor: [34, 197, 94], // green-600
+          textColor: 255,
+          fontStyle: "bold",
+          fontSize: 9,
+        },
+        bodyStyles: {
+          fontSize: 9,
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 15, halign: "center" },
+          3: { cellWidth: 15, halign: "center" },
+          4: { cellWidth: 20, halign: "right" },
+          5: { cellWidth: 15, halign: "center" },
+          6: { cellWidth: 15, halign: "center" },
+          7: { cellWidth: 15, halign: "center" },
+          8: { cellWidth: 30, halign: "right", fontStyle: "bold" },
+        },
+        margin: { left: 14 },
+      });
+
+      yPosition = (doc as any).lastAutoTable.finalY + 10;
+    });
+
+    // Total
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    const totalText = `Estimated Total: $${totalEstimate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    doc.text(totalText, 14, yPosition);
+
+    // Save PDF
+    const fileName = `${project.name.replace(/[^a-z0-9]/gi, '_')}_Estimate.pdf`;
+    doc.save(fileName);
+  };
+
   if (isLoading) {
     return (
       <div className="p-8">
@@ -81,18 +176,7 @@ export default function ProjectDetailPage() {
 
       <div className="flex justify-between items-start mb-8">
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium uppercase ${
-              project.status === "PLANNING"
-                ? "bg-blue-100 text-blue-700"
-                : project.status === "LIVE"
-                ? "bg-green-100 text-green-700"
-                : "bg-gray-100 text-gray-700"
-            }`}>
-              {project.status}
-            </span>
-          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{project.name}</h1>
           {project.clientName && (
             <p className="text-gray-500">Client: {project.clientName}</p>
           )}
@@ -139,37 +223,28 @@ export default function ProjectDetailPage() {
 
       {/* Tabs */}
       <div className="bg-white rounded-xl border border-gray-200">
-        <div className="border-b border-gray-200">
-          <div className="flex gap-8 px-6">
-            <Link
-              href={`/projects/${params.id}?tab=estimate`}
-              className={`py-4 border-b-2 transition-colors ${
-                activeTab === "estimate"
-                  ? "border-green-600 text-green-600 font-medium"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Estimate
-            </Link>
-            <Link
-              href={`/projects/${params.id}?tab=running`}
-              className={`py-4 border-b-2 transition-colors ${
-                activeTab === "running"
-                  ? "border-green-600 text-green-600 font-medium"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Running
-            </Link>
-          </div>
-        </div>
-
         {/* Tab Content */}
         <div className="p-6">
           {activeTab === "estimate" ? (
-            <EstimateTab groupedLines={groupedLines} />
+            <EstimateTab
+              projectId={params.id}
+              activeTab={activeTab}
+              groupedLines={groupedLines}
+              totalEstimate={totalEstimate}
+              onUpdateFields={async (budgetLineId, fields) => {
+                await updateBudgetLineFields(budgetLineId, fields);
+                loadData(); // Reload data to show updated fields
+              }}
+              onAddLine={async (category) => {
+                await addBudgetLine(project.id, category);
+                loadData(); // Reload data to show new line
+              }}
+              onExportBid={handleExportBid}
+            />
           ) : (
             <RunningTab
+              projectId={params.id}
+              activeTab={activeTab}
               groupedLines={groupedLines}
               invoices={project.invoices}
               contacts={contacts}
@@ -189,68 +264,348 @@ export default function ProjectDetailPage() {
   );
 }
 
-function EstimateTab({ groupedLines }: { groupedLines: any }) {
+function EstimateTab({
+  projectId,
+  activeTab,
+  groupedLines,
+  totalEstimate,
+  onUpdateFields,
+  onAddLine,
+  onExportBid,
+}: {
+  projectId: string;
+  activeTab: string;
+  groupedLines: any;
+  totalEstimate: number;
+  onUpdateFields: (budgetLineId: string, fields: any) => Promise<void>;
+  onAddLine: (category: "PRE_PRODUCTION" | "PRODUCTION" | "POST_PRODUCTION") => Promise<void>;
+  onExportBid: () => void;
+}) {
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<any>({});
+  const [isSaving, setIsSaving] = useState(false);
+
   const categories = [
     { key: "PRE_PRODUCTION", label: "Pre-Production Labor" },
     { key: "PRODUCTION", label: "Production Labor" },
     { key: "POST_PRODUCTION", label: "Post-Production Labor" },
   ];
 
-  return (
-    <div className="space-y-8">
-      {categories.map((category) => {
-        const lines = groupedLines[category.key as keyof typeof groupedLines];
-        if (lines.length === 0) return null;
+  const handleEditClick = (line: any) => {
+    setEditingLineId(line.id);
+    setEditValues({
+      name: line.name || "New Line Item",
+      quantity: line.quantity || 0,
+      days: line.days || 0,
+      rate: line.rate || 0,
+      ot1_5: line.ot1_5 || 0,
+      ot2: line.ot2 || 0,
+      ot2_5: line.ot2_5 || 0,
+    });
+  };
 
-        return (
-          <div key={category.key}>
-            <h3 className="text-lg font-semibold text-gray-700 mb-3">{category.label}</h3>
-            <div className="overflow-x-auto border border-gray-200 rounded-lg">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-700">#</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-700">Item</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-700">Days</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-700">Rate</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-700">1.5 OT</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-700">2 OT</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-700">2.5 OT</th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-700">Estimate</th>
+  const handleSave = async (lineId: string) => {
+    setIsSaving(true);
+    await onUpdateFields(lineId, editValues);
+    setIsSaving(false);
+    setEditingLineId(null);
+    setEditValues({});
+  };
+
+  const handleCancel = () => {
+    setEditingLineId(null);
+    setEditValues({});
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, lineId: string) => {
+    if (e.key === "Enter") {
+      handleSave(lineId);
+    } else if (e.key === "Escape") {
+      handleCancel();
+    }
+  };
+
+  const updateEditValue = (field: string, value: string) => {
+    if (field === "name") {
+      setEditValues({ ...editValues, [field]: value });
+    } else {
+      setEditValues({ ...editValues, [field]: parseFloat(value) || 0 });
+    }
+  };
+
+  const calculateLiveEstimate = (values: any) => {
+    const quantity = values.quantity || 1; // Default to 1 if blank/0
+    const days = values.days || 0;
+    const rate = values.rate || 0;
+    const ot1_5 = values.ot1_5 || 0;
+    const ot2 = values.ot2 || 0;
+    const ot2_5 = values.ot2_5 || 0;
+
+    return (quantity * days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
+  };
+
+  return (
+    <div>
+      {/* Tab Controls and Add Line */}
+      <div className="mb-6 flex justify-between items-center">
+        <div className="inline-flex bg-gray-100 rounded-lg p-1">
+          <Link
+            href={`/projects/${projectId}?tab=estimate`}
+            className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === "estimate"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Estimate
+          </Link>
+          <Link
+            href={`/projects/${projectId}?tab=running`}
+            className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === "running"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Running
+          </Link>
+        </div>
+        <select
+          onChange={(e) => {
+            if (e.target.value) {
+              onAddLine(e.target.value as "PRE_PRODUCTION" | "PRODUCTION" | "POST_PRODUCTION");
+              e.target.value = ""; // Reset dropdown
+            }
+          }}
+          className="text-sm border border-gray-300 rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22M6%208l4%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25em] bg-[right_0.5rem_center] bg-no-repeat"
+        >
+          <option value="">+ Add Line</option>
+          <option value="PRE_PRODUCTION">Pre-Production</option>
+          <option value="PRODUCTION">Production</option>
+          <option value="POST_PRODUCTION">Post-Production</option>
+        </select>
+      </div>
+
+      {/* Unified Spreadsheet Table */}
+      <div className="overflow-hidden border border-gray-300 rounded-lg">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+          <thead className="bg-gray-100 border-b border-gray-300">
+            <tr>
+              <th className="px-3 py-2 text-left font-semibold text-gray-700 w-12 border-r border-gray-300"></th>
+              <th className="px-3 py-2 text-left font-semibold text-gray-700 border-r border-gray-300"></th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">No</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">Days</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-24 border-r border-gray-300">Rate</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">1.5 OT</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2 OT</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2.5 OT</th>
+              <th className="px-3 py-2 text-right font-semibold text-gray-700 w-32 border-r border-gray-300">Estimate</th>
+              <th className="px-3 py-2 w-20"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {categories.map((category, catIndex) => {
+              const lines = groupedLines[category.key as keyof typeof groupedLines];
+              if (lines.length === 0) return null;
+              const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
+
+              return (
+                <React.Fragment key={category.key}>
+                  {/* Category Header Row */}
+                  <tr className="bg-gray-50 border-t border-gray-300">
+                    <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
+                    <td colSpan={9} className="px-3 py-2 font-semibold text-gray-700">
+                      {category.label}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {lines.map((line: any) => (
-                    <tr key={line.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500">{line.lineNumber}</td>
-                      <td className="px-4 py-3 font-medium">{line.name}</td>
-                      <td className="px-4 py-3 text-center">{Number(line.days) || "-"}</td>
-                      <td className="px-4 py-3 text-center">${Number(line.rate).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-center">{Number(line.ot1_5) || "-"}</td>
-                      <td className="px-4 py-3 text-center">{Number(line.ot2) || "-"}</td>
-                      <td className="px-4 py-3 text-center">{Number(line.ot2_5) || "-"}</td>
-                      <td className="px-4 py-3 text-right font-semibold">
-                        ${Number(line.estimate).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })}
+
+                  {/* Line Items */}
+                  {lines.map((line: any) => {
+                    const isEditing = editingLineId === line.id;
+                    const displayEstimate = isEditing ? calculateLiveEstimate(editValues) : Number(line.estimate);
+
+                    return (
+                      <tr key={line.id} className="border-t border-gray-200 hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-500 text-center border-r border-gray-300">{line.lineNumber}</td>
+                        <td className="px-3 py-2 border-r border-gray-300">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editValues.name || ""}
+                              onChange={(e) => updateEditValue("name", e.target.value)}
+                              onKeyDown={(e) => handleKeyDown(e, line.id)}
+                              disabled={isSaving}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                            />
+                          ) : (
+                            <span className="font-medium">{line.name}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editValues.quantity || ""}
+                              onChange={(e) => updateEditValue("quantity", e.target.value)}
+                              onKeyDown={(e) => handleKeyDown(e, line.id)}
+                              disabled={isSaving}
+                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                              step="1"
+                              min="0"
+                            />
+                          ) : (
+                            <span>{Number(line.quantity) || "-"}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editValues.days || ""}
+                              onChange={(e) => updateEditValue("days", e.target.value)}
+                              onKeyDown={(e) => handleKeyDown(e, line.id)}
+                              disabled={isSaving}
+                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                              step="0.5"
+                              min="0"
+                            />
+                          ) : (
+                            <span>{Number(line.days) || "-"}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editValues.rate || ""}
+                              onChange={(e) => updateEditValue("rate", e.target.value)}
+                              onKeyDown={(e) => handleKeyDown(e, line.id)}
+                              disabled={isSaving}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                              step="1"
+                              min="0"
+                            />
+                          ) : (
+                            <span>${Number(line.rate).toLocaleString()}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editValues.ot1_5 || ""}
+                              onChange={(e) => updateEditValue("ot1_5", e.target.value)}
+                              onKeyDown={(e) => handleKeyDown(e, line.id)}
+                              disabled={isSaving}
+                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                              step="0.5"
+                              min="0"
+                            />
+                          ) : (
+                            <span>{Number(line.ot1_5) || "-"}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editValues.ot2 || ""}
+                              onChange={(e) => updateEditValue("ot2", e.target.value)}
+                              onKeyDown={(e) => handleKeyDown(e, line.id)}
+                              disabled={isSaving}
+                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                              step="0.5"
+                              min="0"
+                            />
+                          ) : (
+                            <span>{Number(line.ot2) || "-"}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editValues.ot2_5 || ""}
+                              onChange={(e) => updateEditValue("ot2_5", e.target.value)}
+                              onKeyDown={(e) => handleKeyDown(e, line.id)}
+                              disabled={isSaving}
+                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                              step="0.5"
+                              min="0"
+                            />
+                          ) : (
+                            <span>{Number(line.ot2_5) || "-"}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold border-r border-gray-300">
+                          ${displayEstimate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-2">
+                          {isEditing ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => handleSave(line.id)}
+                                disabled={isSaving}
+                                className="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
+                                title="Save"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={handleCancel}
+                                disabled={isSaving}
+                                className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                                title="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleEditClick(line)}
+                              className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+      {/* Export Bid Button */}
+      <div className="mt-6 flex justify-end">
+        <button
+          onClick={onExportBid}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+        >
+          <Download className="w-4 h-4" />
+          Export Bid PDF
+        </button>
+      </div>
     </div>
   );
 }
 
 function RunningTab({
+  projectId,
+  activeTab,
   groupedLines,
   invoices,
   contacts,
   onAssignPayee,
   onUpdateRunningAmount,
 }: {
+  projectId: string;
+  activeTab: string;
   groupedLines: any;
   invoices: any[];
   contacts: any[];
@@ -306,29 +661,66 @@ function RunningTab({
   };
 
   return (
-    <div className="space-y-8">
-      {categories.map((category) => {
-        const lines = groupedLines[category.key as keyof typeof groupedLines];
-        if (lines.length === 0) return null;
+    <div>
+      {/* Tab Controls */}
+      <div className="mb-6">
+        <div className="inline-flex bg-gray-100 rounded-lg p-1">
+          <Link
+            href={`/projects/${projectId}?tab=estimate`}
+            className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === "estimate"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Estimate
+          </Link>
+          <Link
+            href={`/projects/${projectId}?tab=running`}
+            className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === "running"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Running
+          </Link>
+        </div>
+      </div>
 
-        return (
-          <div key={category.key}>
-            <h3 className="text-lg font-semibold text-gray-700 mb-3">{category.label}</h3>
-            <div className="overflow-x-auto border border-gray-200 rounded-lg">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-700">#</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-700">Item</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-700">Payee</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-700">Invoice Status</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-700">Running</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-700">Estimated</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-700">Actual</th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-700">Variance</th>
+      {/* Unified Spreadsheet Table */}
+      <div className="overflow-hidden border border-gray-300 rounded-lg">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-gray-100 border-b border-gray-300">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 w-12 border-r border-gray-300"></th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 border-r border-gray-300"></th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-32 border-r border-gray-300">Payee</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-32 border-r border-gray-300">Invoice Status</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Running</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Estimated</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Actual</th>
+              <th className="px-3 py-2 text-right font-semibold text-gray-700 w-28">Variance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {categories.map((category, catIndex) => {
+              const lines = groupedLines[category.key as keyof typeof groupedLines];
+              if (lines.length === 0) return null;
+              const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
+
+              return (
+                <React.Fragment key={category.key}>
+                  {/* Category Header Row */}
+                  <tr className="bg-gray-50 border-t border-gray-300">
+                    <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
+                    <td colSpan={7} className="px-3 py-2 font-semibold text-gray-700">
+                      {category.label}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
+
+                  {/* Line Items */}
                   {lines.map((line: any) => {
                     const lineInvoices = invoices.filter((inv) => inv.budgetLineId === line.id);
                     const hasInvoices = lineInvoices.length > 0;
@@ -336,10 +728,10 @@ function RunningTab({
                     const isEditing = editingLineId === line.id;
 
                     return (
-                      <tr key={line.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-gray-500">{line.lineNumber}</td>
-                        <td className="px-4 py-3 font-medium">{line.name}</td>
-                        <td className="px-4 py-3 text-center">
+                      <tr key={line.id} className="border-t border-gray-200 hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-500 text-center border-r border-gray-300">{line.lineNumber}</td>
+                        <td className="px-3 py-2 font-medium border-r border-gray-300">{line.name}</td>
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
                           {isEditing ? (
                             <select
                               value={line.payeeId || ""}
@@ -364,7 +756,7 @@ function RunningTab({
                             </button>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
                           {hasInvoices ? (
                             <Link
                               href={`/invoices/${lineInvoices[0].id}`}
@@ -388,7 +780,7 @@ function RunningTab({
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
                           {editingRunningId === line.id ? (
                             <div className="flex items-center justify-center gap-2">
                               <input
@@ -429,24 +821,25 @@ function RunningTab({
                             </button>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
                           ${Number(line.estimate).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-3 py-2 text-center border-r border-gray-300">
                           {Number(line.actualSpent) > 0 ? `$${Number(line.actualSpent).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "-"}
                         </td>
-                        <td className={`px-4 py-3 text-right font-semibold ${variance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        <td className={`px-3 py-2 text-right font-semibold ${variance >= 0 ? "text-green-600" : "text-red-600"}`}>
                           {Number(line.actualSpent) > 0 ? `$${Math.abs(variance).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "-"}
                         </td>
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

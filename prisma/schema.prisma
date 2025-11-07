@@ -104,8 +104,10 @@ enum InvoiceStatus {
 model Contact {
   id          String   @id @default(cuid())
   name        String
-  email       String?
+  email       String
   phone       String?
+  company     String?
+  role        String?
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   invoices    Invoice[]

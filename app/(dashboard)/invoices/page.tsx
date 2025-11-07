@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Search, Filter, Plus, Trash2, Check, X, Flag, AlertCircle } from "lucide-react";
+import { FileText, Search, Plus, Trash2, Check, X, Flag, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getInvoices, updateInvoiceStatus, deleteInvoice } from "@/app/actions/invoices";
@@ -8,7 +8,7 @@ import { getInvoices, updateInvoiceStatus, deleteInvoice } from "@/app/actions/i
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All Status");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -103,21 +103,18 @@ export default function InvoicesPage() {
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
         </div>
-        <div className="relative">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 pr-10 border border-gray-300 rounded-lg appearance-none bg-white cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
-          >
-            <option>All Status</option>
-            <option>Waiting Approval</option>
-            <option>Approved</option>
-            <option>Flagged</option>
-            <option>Paid</option>
-            <option>Missing</option>
-          </select>
-          <Filter className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="pl-4 pr-10 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22M6%208l4%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.5em] bg-[right_0.5rem_center] bg-no-repeat w-[160px] shrink-0"
+        >
+          <option>All</option>
+          <option>Waiting Approval</option>
+          <option>Approved</option>
+          <option>Flagged</option>
+          <option>Paid</option>
+          <option>Missing</option>
+        </select>
       </div>
 
       {/* Invoices List */}
@@ -129,14 +126,14 @@ export default function InvoicesPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {searchTerm || statusFilter !== "All Status" ? "No invoices found" : "No invoices yet"}
+            {searchTerm || statusFilter !== "All" ? "No invoices found" : "No invoices yet"}
           </h3>
           <p className="text-gray-500 mb-6">
-            {searchTerm || statusFilter !== "All Status"
+            {searchTerm || statusFilter !== "All"
               ? "Try adjusting your search or filters"
               : "Upload an invoice to get started"}
           </p>
-          {!searchTerm && statusFilter === "All Status" && (
+          {!searchTerm && statusFilter === "All" && (
             <Link
               href="/invoices/new"
               className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700"

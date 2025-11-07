@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, Search, Mail, Phone, Plus, Trash2, Edit2 } from "lucide-react";
+import { Users, Search, Mail, Phone, Plus, Trash2, Edit2, Building2, Briefcase } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getContacts, createContact, deleteContact, updateContact } from "@/app/actions/contacts";
 
@@ -14,6 +14,8 @@ export default function ContactsPage() {
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [newCompany, setNewCompany] = useState("");
+  const [newRole, setNewRole] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   // Edit contact
@@ -21,6 +23,8 @@ export default function ContactsPage() {
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editCompany, setEditCompany] = useState("");
+  const [editRole, setEditRole] = useState("");
 
   useEffect(() => {
     loadContacts();
@@ -36,13 +40,15 @@ export default function ContactsPage() {
   const handleCreateContact = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!newName.trim()) return;
+    if (!newName.trim() || !newEmail.trim()) return;
 
     setIsSaving(true);
     const result = await createContact({
       name: newName,
-      email: newEmail || undefined,
+      email: newEmail,
       phone: newPhone || undefined,
+      company: newCompany || undefined,
+      role: newRole || undefined,
     });
 
     if (result.success) {
@@ -51,6 +57,8 @@ export default function ContactsPage() {
       setNewName("");
       setNewEmail("");
       setNewPhone("");
+      setNewCompany("");
+      setNewRole("");
     }
     setIsSaving(false);
   };
@@ -69,18 +77,22 @@ export default function ContactsPage() {
     setEditName(contact.name);
     setEditEmail(contact.email || "");
     setEditPhone(contact.phone || "");
+    setEditCompany(contact.company || "");
+    setEditRole(contact.role || "");
   };
 
   const handleUpdateContact = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!editName.trim()) return;
+    if (!editName.trim() || !editEmail.trim()) return;
 
     setIsSaving(true);
     const result = await updateContact(editingContact.id, {
       name: editName,
-      email: editEmail || undefined,
+      email: editEmail,
       phone: editPhone || undefined,
+      company: editCompany || undefined,
+      role: editRole || undefined,
     });
 
     if (result.success) {
@@ -89,13 +101,15 @@ export default function ContactsPage() {
       setEditName("");
       setEditEmail("");
       setEditPhone("");
+      setEditCompany("");
+      setEditRole("");
     }
     setIsSaving(false);
   };
 
   const filteredContacts = contacts.filter((contact) =>
     contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    contact.company?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -138,13 +152,14 @@ export default function ContactsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
+                Email *
               </label>
               <input
                 type="email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="john@example.com"
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
@@ -157,6 +172,30 @@ export default function ContactsPage() {
                 value={newPhone}
                 onChange={(e) => setNewPhone(e.target.value)}
                 placeholder="(555) 123-4567"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Company
+              </label>
+              <input
+                type="text"
+                value={newCompany}
+                onChange={(e) => setNewCompany(e.target.value)}
+                placeholder="ABC Productions"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Role
+              </label>
+              <input
+                type="text"
+                value={newRole}
+                onChange={(e) => setNewRole(e.target.value)}
+                placeholder="Director of Photography"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
@@ -188,7 +227,7 @@ export default function ContactsPage() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search contacts..."
+            placeholder="Search by name or company..."
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
         </div>
@@ -263,6 +302,18 @@ export default function ContactsPage() {
                     <span>{contact.phone}</span>
                   </div>
                 )}
+                {contact.company && (
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Building2 className="w-4 h-4" />
+                    <span className="truncate">{contact.company}</span>
+                  </div>
+                )}
+                {contact.role && (
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Briefcase className="w-4 h-4" />
+                    <span className="truncate">{contact.role}</span>
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 pt-4 border-t border-gray-200">
@@ -304,13 +355,14 @@ export default function ContactsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email
+                    Email *
                   </label>
                   <input
                     type="email"
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
                     placeholder="john@example.com"
+                    required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
@@ -323,6 +375,30 @@ export default function ContactsPage() {
                     value={editPhone}
                     onChange={(e) => setEditPhone(e.target.value)}
                     placeholder="(555) 123-4567"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Company
+                  </label>
+                  <input
+                    type="text"
+                    value={editCompany}
+                    onChange={(e) => setEditCompany(e.target.value)}
+                    placeholder="ABC Productions"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Role
+                  </label>
+                  <input
+                    type="text"
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value)}
+                    placeholder="Director of Photography"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
