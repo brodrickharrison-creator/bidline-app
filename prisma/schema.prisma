@@ -54,6 +54,7 @@ model BudgetLine {
   ot2           Decimal? @db.Decimal(10, 2)
   ot2_5         Decimal? @db.Decimal(10, 2)
   estimate      Decimal  @default(0) @db.Decimal(12, 2)
+  runningAmount Decimal? @db.Decimal(12, 2)
   actualSpent   Decimal  @default(0) @db.Decimal(12, 2)
   projectId     String
   project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)

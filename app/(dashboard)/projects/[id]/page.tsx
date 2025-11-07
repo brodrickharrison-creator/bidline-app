@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, Share2, Check } from "lucide-react";
+import { ArrowLeft, Share2, Check, X } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { getProjectById, assignBudgetLinePayee } from "@/app/actions/projects";
+import { getProjectById, assignBudgetLinePayee, updateRunningAmount } from "@/app/actions/projects";
 import { getContacts } from "@/app/actions/contacts";
 import { notFound, useParams, useSearchParams } from "next/navigation";
 
@@ -37,7 +37,7 @@ export default function ProjectDetailPage() {
   };
 
   const handleShareLink = async () => {
-    const uploadUrl = `${window.location.origin}/invoices/new?project=${params.id}`;
+    const uploadUrl = `${window.location.origin}/upload`;
 
     try {
       await navigator.clipboard.writeText(uploadUrl);
@@ -177,6 +177,10 @@ export default function ProjectDetailPage() {
                 await assignBudgetLinePayee(budgetLineId, payeeId);
                 loadData(); // Reload data to show updated payee
               }}
+              onUpdateRunningAmount={async (budgetLineId, amount) => {
+                await updateRunningAmount(budgetLineId, amount);
+                loadData(); // Reload data to show updated running amount
+              }}
             />
           )}
         </div>
@@ -245,13 +249,18 @@ function RunningTab({
   invoices,
   contacts,
   onAssignPayee,
+  onUpdateRunningAmount,
 }: {
   groupedLines: any;
   invoices: any[];
   contacts: any[];
   onAssignPayee: (budgetLineId: string, payeeId: string | null) => Promise<void>;
+  onUpdateRunningAmount: (budgetLineId: string, amount: number | null) => Promise<void>;
 }) {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [editingRunningId, setEditingRunningId] = useState<string | null>(null);
+  const [runningValue, setRunningValue] = useState<string>("");
+  const [isSavingRunning, setIsSavingRunning] = useState(false);
 
   const categories = [
     { key: "PRE_PRODUCTION", label: "Pre-Production Labor" },
@@ -263,6 +272,37 @@ function RunningTab({
     const finalPayeeId = payeeId === "" ? null : payeeId;
     await onAssignPayee(budgetLineId, finalPayeeId);
     setEditingLineId(null);
+  };
+
+  const handleRunningClick = (line: any) => {
+    setEditingRunningId(line.id);
+    setRunningValue(line.runningAmount ? String(line.runningAmount) : "");
+  };
+
+  const handleRunningChange = async (budgetLineId: string) => {
+    const amount = runningValue === "" ? null : parseFloat(runningValue);
+    if (runningValue !== "" && (isNaN(amount!) || amount! < 0)) {
+      return; // Invalid input, don't save
+    }
+
+    setIsSavingRunning(true);
+    await onUpdateRunningAmount(budgetLineId, amount);
+    setIsSavingRunning(false);
+    setEditingRunningId(null);
+    setRunningValue("");
+  };
+
+  const handleCancelRunning = () => {
+    setEditingRunningId(null);
+    setRunningValue("");
+  };
+
+  const handleRunningKeyDown = (e: React.KeyboardEvent, budgetLineId: string) => {
+    if (e.key === "Enter") {
+      handleRunningChange(budgetLineId);
+    } else if (e.key === "Escape") {
+      handleCancelRunning();
+    }
   };
 
   return (
@@ -348,7 +388,47 @@ function RunningTab({
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-center">-</td>
+                        <td className="px-4 py-3 text-center">
+                          {editingRunningId === line.id ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <input
+                                type="number"
+                                value={runningValue}
+                                onChange={(e) => setRunningValue(e.target.value)}
+                                onKeyDown={(e) => handleRunningKeyDown(e, line.id)}
+                                autoFocus
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                disabled={isSavingRunning}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                              />
+                              <button
+                                onClick={() => handleRunningChange(line.id)}
+                                disabled={isSavingRunning}
+                                className="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
+                                title="Save"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={handleCancelRunning}
+                                disabled={isSavingRunning}
+                                className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                                title="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleRunningClick(line)}
+                              className="text-gray-700 hover:text-purple-600 hover:underline cursor-pointer"
+                            >
+                              {line.runningAmount ? `$${Number(line.runningAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "-"}
+                            </button>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-center">
                           ${Number(line.estimate).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                         </td>

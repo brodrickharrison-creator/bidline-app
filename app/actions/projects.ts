@@ -195,6 +195,7 @@ export async function getProjectById(id: string) {
         ot2: line.ot2 ? Number(line.ot2) : null,
         ot2_5: line.ot2_5 ? Number(line.ot2_5) : null,
         estimate: Number(line.estimate),
+        runningAmount: line.runningAmount ? Number(line.runningAmount) : null,
         actualSpent: Number(line.actualSpent),
         projectId: line.projectId,
         payeeId: line.payeeId,
@@ -274,5 +275,26 @@ export async function assignBudgetLinePayee(budgetLineId: string, payeeId: strin
   } catch (error) {
     console.error("Failed to assign payee to budget line:", error);
     return { success: false, error: "Failed to assign payee" };
+  }
+}
+
+export async function updateRunningAmount(budgetLineId: string, runningAmount: number | null) {
+  try {
+    const budgetLineRaw = await prisma.budgetLine.update({
+      where: { id: budgetLineId },
+      data: { runningAmount: runningAmount },
+      include: {
+        project: true,
+      },
+    });
+
+    // Revalidate project pages
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${budgetLineRaw.projectId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update running amount:", error);
+    return { success: false, error: "Failed to update running amount" };
   }
 }

@@ -105,7 +105,7 @@ export default function ExternalUploadPage() {
             Submit Your Invoice
           </h1>
           <p className="text-gray-600">
-            Upload your invoice and we'll process it for approval
+            Upload your invoice - we'll match it to the right project for you
           </p>
         </div>
 
