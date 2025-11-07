@@ -326,11 +326,24 @@ function RunningTab({
                         </td>
                         <td className="px-4 py-3 text-center">
                           {hasInvoices ? (
-                            <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">
+                            <Link
+                              href={`/invoices/${lineInvoices[0].id}`}
+                              className={`inline-block px-2 py-1 text-xs rounded hover:opacity-80 cursor-pointer transition-all ${
+                                lineInvoices[0].status === "PAID"
+                                  ? "bg-green-100 text-green-700"
+                                  : lineInvoices[0].status === "APPROVED"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : lineInvoices[0].status === "FLAGGED"
+                                  ? "bg-red-100 text-red-700"
+                                  : lineInvoices[0].status === "MISSING"
+                                  ? "bg-gray-100 text-gray-700"
+                                  : "bg-orange-100 text-orange-700"
+                              }`}
+                            >
                               {lineInvoices[0].status.toLowerCase().replace("_", " ")}
-                            </span>
+                            </Link>
                           ) : (
-                            <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">
+                            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
                               Missing
                             </span>
                           )}

@@ -119,6 +119,13 @@ export interface CreateInvoiceInput {
   fileName?: string;
 }
 
+export interface ExternalInvoiceUpload {
+  email: string;
+  amount: number;
+  invoiceNumber?: string;
+  fileName?: string;
+}
+
 // ============================================================================
 // CONTACT TYPES
 // ============================================================================

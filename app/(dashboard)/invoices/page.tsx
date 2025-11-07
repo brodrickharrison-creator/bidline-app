@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Search, Filter, Plus, Trash2, Check, X, Flag } from "lucide-react";
+import { FileText, Search, Filter, Plus, Trash2, Check, X, Flag, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getInvoices, updateInvoiceStatus, deleteInvoice } from "@/app/actions/invoices";
@@ -73,13 +73,22 @@ export default function InvoicesPage() {
           </div>
           <p className="text-gray-500">Review, approve, and manage all project invoices.</p>
         </div>
-        <Link
-          href="/invoices/new"
-          className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Upload Invoice
-        </Link>
+        <div className="flex gap-3">
+          <Link
+            href="/invoices/match"
+            className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 flex items-center gap-2"
+          >
+            <AlertCircle className="w-4 h-4" />
+            Match Invoices
+          </Link>
+          <Link
+            href="/invoices/new"
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Upload Invoice
+          </Link>
+        </div>
       </div>
 
       {/* Search and Filter */}
@@ -168,7 +177,7 @@ export default function InvoicesPage() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredInvoices.map((invoice) => (
-                  <tr key={invoice.id} className="hover:bg-gray-50">
+                  <tr key={invoice.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => window.location.href = `/invoices/${invoice.id}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {invoice.invoiceNumber || "-"}
                     </td>
@@ -176,7 +185,7 @@ export default function InvoicesPage() {
                       {invoice.payee?.name || "Unknown"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <Link href={`/projects/${invoice.project.id}`} className="hover:text-purple-600">
+                      <Link href={`/projects/${invoice.project.id}`} className="hover:text-purple-600" onClick={(e) => e.stopPropagation()}>
                         {invoice.project.name}
                       </Link>
                     </td>
@@ -186,7 +195,7 @@ export default function InvoicesPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                       ${Number(invoice.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <select
                         value={invoice.status}
                         onChange={(e) => handleStatusChange(invoice.id, e.target.value)}
@@ -199,7 +208,7 @@ export default function InvoicesPage() {
                         <option value="MISSING">Missing</option>
                       </select>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleStatusChange(invoice.id, "APPROVED")}

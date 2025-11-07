@@ -96,6 +96,9 @@ export const ROUTES = {
     `/invoices/new?project=${projectId}`,
   CONTACTS: "/contacts",
   SETTINGS: "/settings",
+  // External (public) routes
+  EXTERNAL_UPLOAD: "/upload",
+  EXTERNAL_UPLOAD_SUCCESS: "/upload/success",
 } as const;
 
 // ============================================================================

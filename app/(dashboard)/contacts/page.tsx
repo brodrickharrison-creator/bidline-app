@@ -1,8 +1,8 @@
 "use client";
 
-import { Users, Search, Mail, Phone, Plus, Trash2 } from "lucide-react";
+import { Users, Search, Mail, Phone, Plus, Trash2, Edit2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getContacts, createContact, deleteContact } from "@/app/actions/contacts";
+import { getContacts, createContact, deleteContact, updateContact } from "@/app/actions/contacts";
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<any[]>([]);
@@ -15,6 +15,12 @@ export default function ContactsPage() {
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Edit contact
+  const [editingContact, setEditingContact] = useState<any>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
 
   useEffect(() => {
     loadContacts();
@@ -56,6 +62,35 @@ export default function ContactsPage() {
         loadContacts();
       }
     }
+  };
+
+  const handleEditClick = (contact: any) => {
+    setEditingContact(contact);
+    setEditName(contact.name);
+    setEditEmail(contact.email || "");
+    setEditPhone(contact.phone || "");
+  };
+
+  const handleUpdateContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editName.trim()) return;
+
+    setIsSaving(true);
+    const result = await updateContact(editingContact.id, {
+      name: editName,
+      email: editEmail || undefined,
+      phone: editPhone || undefined,
+    });
+
+    if (result.success) {
+      loadContacts();
+      setEditingContact(null);
+      setEditName("");
+      setEditEmail("");
+      setEditPhone("");
+    }
+    setIsSaving(false);
   };
 
   const filteredContacts = contacts.filter((contact) =>
@@ -195,13 +230,22 @@ export default function ContactsPage() {
                     {contact.name.charAt(0).toUpperCase()}
                   </span>
                 </div>
-                <button
-                  onClick={() => handleDelete(contact.id)}
-                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                  title="Delete contact"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEditClick(contact)}
+                    className="p-1 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded"
+                    title="Edit contact"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(contact.id)}
+                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                    title="Delete contact"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <h3 className="text-lg font-semibold text-gray-900 mb-3">{contact.name}</h3>
@@ -235,6 +279,72 @@ export default function ContactsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Edit Contact Modal */}
+      {editingContact && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-semibold mb-4">Edit Contact</h3>
+            <form onSubmit={handleUpdateContact}>
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="John Doe"
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="john@example.com"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="(555) 123-4567"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingContact(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {isSaving ? "Saving..." : "Update Contact"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
