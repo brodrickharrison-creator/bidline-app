@@ -71,21 +71,26 @@ export default function ProjectDetailPage() {
 
     let yPosition = project.clientName ? 58 : 52;
 
-    // Categories
-    const categories = [
-      { key: "PRE_PRODUCTION", label: "Pre-Production Labor" },
-      { key: "PRODUCTION", label: "Production Labor" },
-      { key: "POST_PRODUCTION", label: "Post-Production Labor" },
-    ];
+    // Group budget lines by category
+    const pdfGroupedLines = project.budgetLines.reduce((acc: Record<string, any[]>, line: any) => {
+      if (!acc[line.category]) {
+        acc[line.category] = [];
+      }
+      acc[line.category].push(line);
+      return acc;
+    }, {});
 
-    categories.forEach((category) => {
-      const lines = groupedLines[category.key as keyof typeof groupedLines];
+    // Get categories sorted
+    const pdfCategories = Object.keys(pdfGroupedLines).sort();
+
+    pdfCategories.forEach((category) => {
+      const lines = pdfGroupedLines[category];
       if (lines.length === 0) return;
 
       // Category heading
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
-      doc.text(category.label, 14, yPosition);
+      doc.text(category, 14, yPosition);
       yPosition += 6;
 
       // Table data
@@ -159,12 +164,17 @@ export default function ProjectDetailPage() {
   const totalActual = project.budgetLines.reduce((sum: number, line: any) => sum + Number(line.actualSpent), 0);
   const variance = totalEstimate - totalActual;
 
-  // Group budget lines by category
-  const groupedLines = {
-    PRE_PRODUCTION: project.budgetLines.filter((l: any) => l.category === "PRE_PRODUCTION"),
-    PRODUCTION: project.budgetLines.filter((l: any) => l.category === "PRODUCTION"),
-    POST_PRODUCTION: project.budgetLines.filter((l: any) => l.category === "POST_PRODUCTION"),
-  };
+  // Group budget lines by category dynamically
+  const groupedLines = project.budgetLines.reduce((acc: Record<string, any[]>, line: any) => {
+    if (!acc[line.category]) {
+      acc[line.category] = [];
+    }
+    acc[line.category].push(line);
+    return acc;
+  }, {});
+
+  // Get unique categories for iteration
+  const categories = Object.keys(groupedLines).sort();
 
   return (
     <div className="p-8">
@@ -230,6 +240,7 @@ export default function ProjectDetailPage() {
               projectId={params.id}
               activeTab={activeTab}
               groupedLines={groupedLines}
+              categories={categories}
               totalEstimate={totalEstimate}
               onUpdateFields={async (budgetLineId, fields) => {
                 await updateBudgetLineFields(budgetLineId, fields);
@@ -246,6 +257,7 @@ export default function ProjectDetailPage() {
               projectId={params.id}
               activeTab={activeTab}
               groupedLines={groupedLines}
+              categories={categories}
               invoices={project.invoices}
               contacts={contacts}
               onAssignPayee={async (budgetLineId, payeeId) => {
@@ -268,6 +280,7 @@ function EstimateTab({
   projectId,
   activeTab,
   groupedLines,
+  categories,
   totalEstimate,
   onUpdateFields,
   onAddLine,
@@ -276,20 +289,27 @@ function EstimateTab({
   projectId: string;
   activeTab: string;
   groupedLines: any;
+  categories: string[];
   totalEstimate: number;
   onUpdateFields: (budgetLineId: string, fields: any) => Promise<void>;
-  onAddLine: (category: "PRE_PRODUCTION" | "PRODUCTION" | "POST_PRODUCTION") => Promise<void>;
+  onAddLine: (category: string) => Promise<void>;
   onExportBid: () => void;
 }) {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
 
-  const categories = [
-    { key: "PRE_PRODUCTION", label: "Pre-Production Labor" },
-    { key: "PRODUCTION", label: "Production Labor" },
-    { key: "POST_PRODUCTION", label: "Post-Production Labor" },
-  ];
+  // Helper function to check if a line has any filled data
+  const hasFilledData = (line: any) => {
+    return (
+      line.quantity != null ||
+      line.days != null ||
+      line.rate != null ||
+      line.ot1_5 != null ||
+      line.ot2 != null ||
+      line.ot2_5 != null
+    );
+  };
 
   const handleEditClick = (line: any) => {
     setEditingLineId(line.id);
@@ -373,16 +393,18 @@ function EstimateTab({
         <select
           onChange={(e) => {
             if (e.target.value) {
-              onAddLine(e.target.value as "PRE_PRODUCTION" | "PRODUCTION" | "POST_PRODUCTION");
+              onAddLine(e.target.value);
               e.target.value = ""; // Reset dropdown
             }
           }}
           className="text-sm border border-gray-300 rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22M6%208l4%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25em] bg-[right_0.5rem_center] bg-no-repeat"
         >
           <option value="">+ Add Line</option>
-          <option value="PRE_PRODUCTION">Pre-Production</option>
-          <option value="PRODUCTION">Production</option>
-          <option value="POST_PRODUCTION">Post-Production</option>
+          {categories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -406,22 +428,25 @@ function EstimateTab({
           </thead>
           <tbody>
             {categories.map((category, catIndex) => {
-              const lines = groupedLines[category.key as keyof typeof groupedLines];
-              if (lines.length === 0) return null;
+              const lines = groupedLines[category] || [];
+              // Filter to only show lines with filled data
+              const filledLines = lines.filter((line: any) => hasFilledData(line));
+              // Don't show category if no filled lines
+              if (filledLines.length === 0) return null;
               const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
 
               return (
-                <React.Fragment key={category.key}>
+                <React.Fragment key={category}>
                   {/* Category Header Row */}
                   <tr className="bg-gray-50 border-t border-gray-300">
                     <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
                     <td colSpan={9} className="px-3 py-2 font-semibold text-gray-700">
-                      {category.label}
+                      {category}
                     </td>
                   </tr>
 
                   {/* Line Items */}
-                  {lines.map((line: any) => {
+                  {filledLines.map((line: any) => {
                     const isEditing = editingLineId === line.id;
                     const displayEstimate = isEditing ? calculateLiveEstimate(editValues) : Number(line.estimate);
 
@@ -581,17 +606,17 @@ function EstimateTab({
       </div>
     </div>
 
-      {/* Export Bid Button */}
-      <div className="mt-6 flex justify-end">
-        <button
-          onClick={onExportBid}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
-        >
-          <Download className="w-4 h-4" />
-          Export Bid PDF
-        </button>
-      </div>
+    {/* Export Bid Button */}
+    <div className="mt-6 flex justify-end">
+      <button
+        onClick={onExportBid}
+        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+      >
+        <Download className="w-4 h-4" />
+        Export Bid PDF
+      </button>
     </div>
+  </div>
   );
 }
 
@@ -599,6 +624,7 @@ function RunningTab({
   projectId,
   activeTab,
   groupedLines,
+  categories,
   invoices,
   contacts,
   onAssignPayee,
@@ -607,6 +633,7 @@ function RunningTab({
   projectId: string;
   activeTab: string;
   groupedLines: any;
+  categories: string[];
   invoices: any[];
   contacts: any[];
   onAssignPayee: (budgetLineId: string, payeeId: string | null) => Promise<void>;
@@ -617,11 +644,17 @@ function RunningTab({
   const [runningValue, setRunningValue] = useState<string>("");
   const [isSavingRunning, setIsSavingRunning] = useState(false);
 
-  const categories = [
-    { key: "PRE_PRODUCTION", label: "Pre-Production Labor" },
-    { key: "PRODUCTION", label: "Production Labor" },
-    { key: "POST_PRODUCTION", label: "Post-Production Labor" },
-  ];
+  // Helper function to check if a line has any filled data
+  const hasFilledData = (line: any) => {
+    return (
+      line.quantity != null ||
+      line.days != null ||
+      line.rate != null ||
+      line.ot1_5 != null ||
+      line.ot2 != null ||
+      line.ot2_5 != null
+    );
+  };
 
   const handlePayeeChange = async (budgetLineId: string, payeeId: string) => {
     const finalPayeeId = payeeId === "" ? null : payeeId;
@@ -706,22 +739,25 @@ function RunningTab({
           </thead>
           <tbody>
             {categories.map((category, catIndex) => {
-              const lines = groupedLines[category.key as keyof typeof groupedLines];
-              if (lines.length === 0) return null;
+              const lines = groupedLines[category] || [];
+              // Filter to only show lines with filled data
+              const filledLines = lines.filter((line: any) => hasFilledData(line));
+              // Don't show category if no filled lines
+              if (filledLines.length === 0) return null;
               const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
 
               return (
-                <React.Fragment key={category.key}>
+                <React.Fragment key={category}>
                   {/* Category Header Row */}
                   <tr className="bg-gray-50 border-t border-gray-300">
                     <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
                     <td colSpan={7} className="px-3 py-2 font-semibold text-gray-700">
-                      {category.label}
+                      {category}
                     </td>
                   </tr>
 
                   {/* Line Items */}
-                  {lines.map((line: any) => {
+                  {filledLines.map((line: any) => {
                     const lineInvoices = invoices.filter((inv) => inv.budgetLineId === line.id);
                     const hasInvoices = lineInvoices.length > 0;
                     const variance = Number(line.estimate) - Number(line.actualSpent);

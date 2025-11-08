@@ -1,42 +1,37 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { createProject, type BudgetLineInput } from "@/app/actions/projects";
+import { getDefaultLineItemTemplates } from "@/app/actions/templates";
 import { useRouter } from "next/navigation";
 
 type BudgetLine = {
   id: string;
-  category: "PRE_PRODUCTION" | "PRODUCTION" | "POST_PRODUCTION";
+  category: string;
   lineNumber: number;
   name: string;
-  quantity: number;
-  days: number;
-  rate: number;
-  ot1_5: number;
-  ot2: number;
-  ot2_5: number;
+  quantity: number | null;
+  days: number | null;
+  rate: number | null;
+  ot1_5: number | null;
+  ot2: number | null;
+  ot2_5: number | null;
 };
 
-const defaultLines: Omit<BudgetLine, "id">[] = [
-  { category: "PRE_PRODUCTION", lineNumber: 1, name: "Line Producer", quantity: 0, days: 0, rate: 0, ot1_5: 0, ot2: 0, ot2_5: 0 },
-  { category: "PRE_PRODUCTION", lineNumber: 2, name: "Director Prep Days", quantity: 0, days: 0, rate: 0, ot1_5: 0, ot2: 0, ot2_5: 0 },
-  { category: "PRE_PRODUCTION", lineNumber: 3, name: "Casting Fee", quantity: 0, days: 0, rate: 0, ot1_5: 0, ot2: 0, ot2_5: 0 },
-  { category: "PRODUCTION", lineNumber: 4, name: "Key Grip", quantity: 0, days: 0, rate: 0, ot1_5: 0, ot2: 0, ot2_5: 0 },
-  { category: "PRODUCTION", lineNumber: 5, name: "Camera Operator", quantity: 0, days: 0, rate: 0, ot1_5: 0, ot2: 0, ot2_5: 0 },
-  { category: "PRODUCTION", lineNumber: 6, name: "Equipment Rentals", quantity: 0, days: 0, rate: 0, ot1_5: 0, ot2: 0, ot2_5: 0 },
-  { category: "POST_PRODUCTION", lineNumber: 7, name: "Editor", quantity: 0, days: 0, rate: 0, ot1_5: 0, ot2: 0, ot2_5: 0 },
-  { category: "POST_PRODUCTION", lineNumber: 8, name: "Color Grade", quantity: 0, days: 0, rate: 0, ot1_5: 0, ot2: 0, ot2_5: 0 },
-  { category: "POST_PRODUCTION", lineNumber: 9, name: "Sound Mix", quantity: 0, days: 0, rate: 0, ot1_5: 0, ot2: 0, ot2_5: 0 },
-];
-
 function calculateEstimate(line: BudgetLine): number {
-  const quantity = line.quantity || 1; // Default to 1 if blank/0
-  const baseAmount = quantity * line.days * line.rate;
-  const ot1_5Amount = line.ot1_5 * line.rate * 1.5;
-  const ot2Amount = line.ot2 * line.rate * 2;
-  const ot2_5Amount = line.ot2_5 * line.rate * 2.5;
+  const quantity = line.quantity ?? 1; // Default to 1 if null/undefined
+  const days = line.days ?? 0;
+  const rate = line.rate ?? 0;
+  const ot1_5 = line.ot1_5 ?? 0;
+  const ot2 = line.ot2 ?? 0;
+  const ot2_5 = line.ot2_5 ?? 0;
+
+  const baseAmount = quantity * days * rate;
+  const ot1_5Amount = ot1_5 * rate * 1.5;
+  const ot2Amount = ot2 * rate * 2;
+  const ot2_5Amount = ot2_5 * rate * 2.5;
   return baseAmount + ot1_5Amount + ot2Amount + ot2_5Amount;
 }
 
@@ -44,22 +39,62 @@ export default function NewProjectPage() {
   const router = useRouter();
   const [projectName, setProjectName] = useState("");
   const [clientName, setClientName] = useState("");
-  const [budgetLines, setBudgetLines] = useState<BudgetLine[]>(
-    defaultLines.map((line, i) => ({ ...line, id: `line-${i}` }))
-  );
+  const [budgetLines, setBudgetLines] = useState<BudgetLine[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load line item templates on mount
+  useEffect(() => {
+    async function loadTemplates() {
+      setIsLoading(true);
+      try {
+        const templates = await getDefaultLineItemTemplates();
+
+        // Convert templates to budget lines
+        const lines: BudgetLine[] = templates.map((template, index) => ({
+          id: `line-${template.id}`,
+          category: template.category,
+          lineNumber: index + 1,
+          name: template.role,
+          quantity: null,
+          days: null,
+          rate: null,
+          ot1_5: null,
+          ot2: null,
+          ot2_5: null,
+        }));
+
+        setBudgetLines(lines);
+
+        // Extract unique categories
+        const uniqueCategories = Array.from(new Set(templates.map(t => t.category))).sort();
+        setCategories(uniqueCategories);
+      } catch (err) {
+        console.error("Failed to load templates:", err);
+        setError("Failed to load line item templates");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadTemplates();
+  }, []);
 
   const updateLine = (id: string, field: keyof BudgetLine, value: string | number) => {
     setBudgetLines((lines) =>
       lines.map((line) => {
         if (line.id !== id) return line;
 
-        // Handle name field as string, numeric fields as numbers
+        // Handle name field as string, numeric fields as numbers or null
         if (field === "name") {
           return { ...line, [field]: value };
         } else {
-          return { ...line, [field]: typeof value === "string" ? parseFloat(value) || 0 : value };
+          // Convert empty strings to null, otherwise parse as number
+          const numValue = typeof value === "string" ? (value === "" ? null : parseFloat(value) || null) : value;
+          return { ...line, [field]: numValue };
         }
       })
     );
@@ -74,12 +109,12 @@ export default function NewProjectPage() {
         category,
         lineNumber: maxLineNumber + 1,
         name: "New Line Item",
-        quantity: 0,
-        days: 0,
-        rate: 0,
-        ot1_5: 0,
-        ot2: 0,
-        ot2_5: 0,
+        quantity: null,
+        days: null,
+        rate: null,
+        ot1_5: null,
+        ot2: null,
+        ot2_5: null,
       },
     ]);
   };
@@ -90,11 +125,14 @@ export default function NewProjectPage() {
 
   const totalEstimate = budgetLines.reduce((sum, line) => sum + calculateEstimate(line), 0);
 
-  const groupedLines = {
-    PRE_PRODUCTION: budgetLines.filter((l) => l.category === "PRE_PRODUCTION"),
-    PRODUCTION: budgetLines.filter((l) => l.category === "PRODUCTION"),
-    POST_PRODUCTION: budgetLines.filter((l) => l.category === "POST_PRODUCTION"),
-  };
+  // Group lines by category dynamically
+  const groupedLines = budgetLines.reduce((acc, line) => {
+    if (!acc[line.category]) {
+      acc[line.category] = [];
+    }
+    acc[line.category].push(line);
+    return acc;
+  }, {} as Record<string, BudgetLine[]>);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,20 +222,36 @@ export default function NewProjectPage() {
           <div className="mb-8">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Budget Breakdown</h2>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    addLine(e.target.value as BudgetLine["category"]);
-                    e.target.value = ""; // Reset dropdown
-                  }
-                }}
-                className="text-sm border border-gray-300 rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22M6%208l4%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25em] bg-[right_0.5rem_center] bg-no-repeat"
-              >
-                <option value="">+ Add Line</option>
-                <option value="PRE_PRODUCTION">Pre-Production</option>
-                <option value="PRODUCTION">Production</option>
-                <option value="POST_PRODUCTION">Post-Production</option>
-              </select>
+              <div className="flex gap-3 items-center">
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="text-sm border border-gray-300 rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22M6%208l4%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25em] bg-[right_0.5rem_center] bg-no-repeat"
+                >
+                  <option value="All">All Categories</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      addLine(e.target.value);
+                      e.target.value = ""; // Reset dropdown
+                    }
+                  }}
+                  className="text-sm border border-gray-300 rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22M6%208l4%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25em] bg-[right_0.5rem_center] bg-no-repeat"
+                >
+                  <option value="">+ Add Line</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Unified Spreadsheet Table */}
@@ -219,10 +273,24 @@ export default function NewProjectPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(["PRE_PRODUCTION", "PRODUCTION", "POST_PRODUCTION"] as const).map((category, catIndex) => {
-                    const categoryLabel = category.replace("_", "-").toLowerCase().split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-                    const lines = groupedLines[category];
-                    const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={10} className="px-3 py-8 text-center text-gray-500">
+                        Loading templates...
+                      </td>
+                    </tr>
+                  ) : categories.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="px-3 py-8 text-center text-gray-500">
+                        No line item templates found. Please run the database seed script.
+                      </td>
+                    </tr>
+                  ) : (
+                    categories
+                      .filter((category) => categoryFilter === "All" || category === categoryFilter)
+                      .map((category, catIndex) => {
+                        const lines = groupedLines[category] || [];
+                        const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C, etc.
 
                     return (
                       <React.Fragment key={category}>
@@ -230,7 +298,7 @@ export default function NewProjectPage() {
                         <tr className="bg-gray-50 border-t border-gray-300">
                           <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
                           <td colSpan={9} className="px-3 py-2 font-semibold text-gray-700">
-                            {categoryLabel} Labor
+                            {category}
                           </td>
                         </tr>
 
@@ -323,7 +391,8 @@ export default function NewProjectPage() {
                         ))}
                       </React.Fragment>
                     );
-                  })}
+                      })
+                  )}
                 </tbody>
               </table>
               </div>

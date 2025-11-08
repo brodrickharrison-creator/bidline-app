@@ -5,15 +5,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export type BudgetLineInput = {
-  category: "PRE_PRODUCTION" | "PRODUCTION" | "POST_PRODUCTION";
+  category: string;
   lineNumber: number;
   name: string;
-  quantity?: number;
-  days?: number;
-  rate?: number;
-  ot1_5?: number;
-  ot2?: number;
-  ot2_5?: number;
+  quantity?: number | null;
+  days?: number | null;
+  rate?: number | null;
+  ot1_5?: number | null;
+  ot2?: number | null;
+  ot2_5?: number | null;
 };
 
 export async function createProject(formData: {
@@ -24,12 +24,12 @@ export async function createProject(formData: {
   try {
     // Calculate total budget from all line items
     const totalBudget = formData.budgetLines.reduce((sum, line) => {
-      const quantity = line.quantity || 1; // Default to 1 if blank/0
-      const days = line.days || 0;
-      const rate = line.rate || 0;
-      const ot1_5 = line.ot1_5 || 0;
-      const ot2 = line.ot2 || 0;
-      const ot2_5 = line.ot2_5 || 0;
+      const quantity = line.quantity ?? 1; // Default to 1 if null/undefined
+      const days = line.days ?? 0;
+      const rate = line.rate ?? 0;
+      const ot1_5 = line.ot1_5 ?? 0;
+      const ot2 = line.ot2 ?? 0;
+      const ot2_5 = line.ot2_5 ?? 0;
 
       const estimate = (quantity * days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
       return sum + estimate;
@@ -64,12 +64,13 @@ export async function createProject(formData: {
         userId,
         budgetLines: {
           create: formData.budgetLines.map((line) => {
-            const quantity = line.quantity || 1; // Default to 1 if blank/0
-            const days = line.days || 0;
-            const rate = line.rate || 0;
-            const ot1_5 = line.ot1_5 || 0;
-            const ot2 = line.ot2 || 0;
-            const ot2_5 = line.ot2_5 || 0;
+            // Use nullish coalescing for calculation only
+            const quantity = line.quantity ?? 1;
+            const days = line.days ?? 0;
+            const rate = line.rate ?? 0;
+            const ot1_5 = line.ot1_5 ?? 0;
+            const ot2 = line.ot2 ?? 0;
+            const ot2_5 = line.ot2_5 ?? 0;
 
             const estimate = (quantity * days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
 
@@ -77,12 +78,13 @@ export async function createProject(formData: {
               category: line.category,
               lineNumber: line.lineNumber,
               name: line.name,
-              quantity,
-              days,
-              rate,
-              ot1_5,
-              ot2,
-              ot2_5,
+              // Store actual values (including null) in database
+              quantity: line.quantity,
+              days: line.days,
+              rate: line.rate,
+              ot1_5: line.ot1_5,
+              ot2: line.ot2,
+              ot2_5: line.ot2_5,
               estimate,
             };
           }),
@@ -377,7 +379,7 @@ export async function updateBudgetLineFields(
 
 export async function addBudgetLine(
   projectId: string,
-  category: "PRE_PRODUCTION" | "PRODUCTION" | "POST_PRODUCTION"
+  category: string
 ) {
   try {
     // Get the highest line number for this project

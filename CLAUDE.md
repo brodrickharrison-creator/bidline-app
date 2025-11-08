@@ -35,9 +35,15 @@ npm start
 npm run lint
 
 # Database commands
-npx prisma db push      # Push schema changes to database
-npx prisma studio       # Open Prisma Studio GUI at http://localhost:5555
-npx prisma generate     # Generate Prisma Client after schema changes
+npm run db:push         # Push schema changes to database
+npm run db:studio       # Open Prisma Studio GUI at http://localhost:5555
+npm run db:generate     # Generate Prisma Client after schema changes
+npm run db:seed         # Seed database with line item templates (276 items)
+
+# Or use npx directly
+npx prisma db push
+npx prisma studio
+npx prisma generate
 ```
 
 ## Database Setup
@@ -93,9 +99,14 @@ app/
 - **Project**: Production with budget tracking
   - Status: PLANNING → LIVE → COMPLETED → ARCHIVED
   - Tracks: `totalBudget`, `totalSpent`
+- **LineItemTemplate**: Template library for budget line items
+  - Contains 276 predefined roles across 16 categories (CAMERA, ART, ELECTRIC, etc.)
+  - Seeded from CSV file via `npm run db:seed`
+  - Used to populate new projects with empty budget lines
 - **BudgetLine**: Individual line items in project budget
-  - Categories: PRE_PRODUCTION, PRODUCTION, POST_PRODUCTION
+  - Dynamic categories (stored as strings, not enum) - matches template categories
   - Fields: `quantity`, `days`, `rate`, `ot1_5`, `ot2`, `ot2_5`, `estimate`, `runningAmount`, `actualSpent`
+  - All numeric fields are nullable - only lines with at least one filled field are shown in views
   - Optional payee assignment for invoice matching
 - **Invoice**: Expense records with approval workflow
   - Status: MISSING → WAITING_APPROVAL → APPROVED/FLAGGED → PAID
@@ -108,6 +119,44 @@ app/
 - BudgetLine → Invoices (one-to-many for actuals tracking)
 - BudgetLine → Contact (payee assignment for invoice suggestions)
 - Contact → Invoices (payee identification)
+
+### Line Item Template System
+
+**Architecture**: Dynamic template-based budget creation system
+
+**Template Storage:**
+- 276 line item templates stored in `LineItemTemplate` table
+- Organized by category (e.g., CAMERA, ART, ELECTRIC, GRIP, SOUND, etc.)
+- Each template has: `category`, `role`, `isDefault`, `sortOrder`
+- Seeded from `prisma/line_item_templates_seed.csv`
+
+**Project Creation Flow:**
+1. User creates new project at `/projects/new`
+2. Page loads all templates via `getDefaultLineItemTemplates()` server action
+3. Each template becomes a `BudgetLine` with null values for quantity, days, rate, OT fields
+4. All 276 lines are saved to database but hidden until user fills in data
+
+**Visibility Logic:**
+- Estimate/Running views filter lines using `hasFilledData()` function
+- Only shows lines where at least one field (quantity, days, rate, ot1_5, ot2, ot2_5) is not null
+- Categories without any filled lines are completely hidden
+- "+ Add Line" dropdown dynamically populates from template categories
+
+**Dynamic Categories:**
+- `BudgetLine.category` is a `String` (not enum) to support flexible template categories
+- Categories are extracted dynamically from templates, not hardcoded
+- All views (Create, Estimate, Running, PDF Export) iterate over dynamic category list
+- Category dropdown in filter controls populated from actual template data
+
+**Server Actions:**
+- `getDefaultLineItemTemplates()` - Fetch all templates where `isDefault = true`
+- `getTemplatesByCategory(category)` - Fetch templates for specific category
+- `getAllTemplateCategories()` - Get unique category list for filters
+
+**Adding Custom Templates:**
+1. Add rows to `line_item_templates_seed.csv`
+2. Run `npm run db:seed` to repopulate templates
+3. New templates automatically appear in create project flow
 
 ### Invoice Workflow Architecture
 
