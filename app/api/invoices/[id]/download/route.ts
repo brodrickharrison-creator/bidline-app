@@ -22,7 +22,7 @@ import { getInvoiceFileUrl, validateFileAccess } from "@/lib/supabase/storage";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Get authenticated user
@@ -35,7 +35,8 @@ export async function GET(
       );
     }
 
-    const invoiceId = params.id;
+    const resolvedParams = await params;
+    const invoiceId = resolvedParams.id;
 
     // Fetch invoice with project to verify ownership
     const invoice = await prisma.invoice.findUnique({
@@ -59,7 +60,7 @@ export async function GET(
     // Verify user owns this invoice's project
     // TODO: When implementing admin role, add check:
     // if (user.role !== "ADMIN" && invoice.project.userId !== user.id)
-    if (invoice.project.userId !== user.id) {
+    if (invoice.project && invoice.project.userId !== user.id) {
       return NextResponse.json(
         { error: "Unauthorized - you do not have access to this invoice" },
         { status: 403 }
@@ -100,7 +101,7 @@ export async function GET(
       fileMimeType: invoice.fileMimeType,
       expiresIn: 3600, // seconds
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Invoice download API error:", error);
     return NextResponse.json(
       { error: "Failed to generate download URL" },

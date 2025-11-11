@@ -91,7 +91,7 @@ export default function ExternalUploadPage() {
       } else {
         setError(result.error || "Failed to upload invoice");
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -110,7 +110,7 @@ export default function ExternalUploadPage() {
             Submit Your Invoice
           </h1>
           <p className="text-gray-600">
-            Upload your invoice - we'll match it to the right project for you
+            Upload your invoice - we&apos;ll match it to the right project for you
           </p>
         </div>
 
@@ -181,7 +181,7 @@ export default function ExternalUploadPage() {
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                We'll use this to match your invoice to the correct project
+                We&apos;ll use this to match your invoice to the correct project
               </p>
             </div>
 

@@ -1,29 +1,39 @@
 "use client";
 
-import { FileText, Search, Plus, Trash2, Check, X, Flag, AlertCircle } from "lucide-react";
+import { FileText, Search, Plus, Trash2, Check, Flag, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { getInvoices, updateInvoiceStatus, deleteInvoice } from "@/app/actions/invoices";
 
+interface InvoiceData {
+  id: string;
+  invoiceNumber: string | null;
+  amount: number;
+  status: string;
+  payee: { id: string; name: string } | null;
+  project: { id: string; name: string } | null;
+  budgetLine: { id: string; lineNumber: number; name: string } | null;
+}
+
 export default function InvoicesPage() {
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceData[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    loadInvoices();
-  }, [statusFilter]);
-
-  const loadInvoices = async () => {
+  const loadInvoices = useCallback(async () => {
     setIsLoading(true);
     const data = await getInvoices({ status: statusFilter });
     setInvoices(data);
     setIsLoading(false);
-  };
+  }, [statusFilter]);
+
+  useEffect(() => {
+    loadInvoices();
+  }, [loadInvoices]);
 
   const handleStatusChange = async (invoiceId: string, newStatus: string) => {
-    const result = await updateInvoiceStatus(invoiceId, newStatus as any);
+    const result = await updateInvoiceStatus(invoiceId, newStatus as "MISSING" | "WAITING_APPROVAL" | "APPROVED" | "FLAGGED" | "PAID");
     if (result.success) {
       loadInvoices();
     }
@@ -43,7 +53,7 @@ export default function InvoicesPage() {
       !searchTerm ||
       invoice.payee?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.project.name.toLowerCase().includes(searchTerm.toLowerCase());
+      invoice.project?.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
 
@@ -182,9 +192,13 @@ export default function InvoicesPage() {
                       {invoice.payee?.name || "Unknown"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <Link href={`/projects/${invoice.project.id}`} className="hover:text-purple-600" onClick={(e) => e.stopPropagation()}>
-                        {invoice.project.name}
-                      </Link>
+                      {invoice.project ? (
+                        <Link href={`/projects/${invoice.project.id}`} className="hover:text-purple-600" onClick={(e) => e.stopPropagation()}>
+                          {invoice.project.name}
+                        </Link>
+                      ) : (
+                        <span className="text-gray-400">Unassigned</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {invoice.budgetLine ? `#${invoice.budgetLine.lineNumber} ${invoice.budgetLine.name}` : "-"}

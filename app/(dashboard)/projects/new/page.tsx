@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { createProject, type BudgetLineInput } from "@/app/actions/projects";
+import { createProject } from "@/app/actions/projects";
 import { getDefaultLineItemTemplates } from "@/app/actions/templates";
 import { useRouter } from "next/navigation";
 
@@ -91,7 +91,7 @@ export default function NewProjectPage() {
 
         // Handle name field as string, numeric fields as numbers or null
         if (field === "name") {
-          return { ...line, [field]: value };
+          return { ...line, [field]: String(value) };
         } else {
           // Convert empty strings to null, otherwise parse as number
           const numValue = typeof value === "string" ? (value === "" ? null : parseFloat(value) || null) : value;
@@ -174,7 +174,7 @@ export default function NewProjectPage() {
       } else {
         setError(result.error || "Failed to create project");
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred");
     } finally {
       setIsSubmitting(false);
@@ -329,7 +329,7 @@ export default function NewProjectPage() {
                         </tr>
 
                         {/* Line Items */}
-                        {lines.map((line, lineIndex) => (
+                        {lines.map((line) => (
                           <tr key={line.id} className="border-t border-gray-200 hover:bg-gray-50">
                             <td className="px-3 py-2 text-gray-500 text-center border-r border-gray-300">{line.lineNumber}</td>
                             <td className="px-3 py-2 border-r border-gray-300">

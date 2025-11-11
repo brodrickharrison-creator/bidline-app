@@ -5,15 +5,24 @@ import Link from "next/link";
 import { getProjects, deleteProject, updateProjectStatus } from "@/app/actions/projects";
 import { useEffect, useState, memo, useCallback } from "react";
 
+interface ProjectData {
+  id: string;
+  name: string;
+  clientName: string | null;
+  status: string;
+  totalBudget: number;
+  totalSpent: number;
+}
+
 // Memoized ProjectCard component to prevent unnecessary re-renders
 const ProjectCard = memo(({
   project,
   onDelete,
   onStatusChange
 }: {
-  project: any;
+  project: ProjectData;
   onDelete: (id: string) => void;
-  onStatusChange: (id: string, status: any) => void;
+  onStatusChange: (id: string, status: "PLANNING" | "LIVE" | "COMPLETED" | "ARCHIVED") => void;
 }) => {
   const [openMenuId, setOpenMenuId] = useState(false);
   const [openStatusId, setOpenStatusId] = useState(false);
@@ -93,10 +102,10 @@ const ProjectCard = memo(({
           {/* Status Dropdown */}
           {openStatusId && (
             <div className="absolute right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-              {["PLANNING", "LIVE", "COMPLETED"].map((status) => (
+              {(["PLANNING", "LIVE", "COMPLETED"] as const).map((status) => (
                 <button
                   key={status}
-                  onClick={() => handleStatusChange(status as any)}
+                  onClick={() => handleStatusChange(status)}
                   className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 ${
                     project.status === status ? "font-semibold" : ""
                   }`}
@@ -147,23 +156,23 @@ const ProjectCard = memo(({
 ProjectCard.displayName = "ProjectCard";
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<ProjectData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PLANNING" | "LIVE" | "COMPLETED">("ALL");
 
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     setIsLoading(true);
     const data = await getProjects();
     setProjects(data);
     setIsLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   const handleDeleteClick = useCallback((projectId: string) => {
     setDeleteConfirmId(projectId);

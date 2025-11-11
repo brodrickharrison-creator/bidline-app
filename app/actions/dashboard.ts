@@ -83,7 +83,7 @@ export async function getDashboardStats() {
         email: invoice.payee.email,
         phone: invoice.payee.phone,
       } : null,
-      project: {
+      project: invoice.project ? {
         id: invoice.project.id,
         name: invoice.project.name,
         clientName: invoice.project.clientName,
@@ -93,7 +93,7 @@ export async function getDashboardStats() {
         createdAt: invoice.project.createdAt,
         updatedAt: invoice.project.updatedAt,
         userId: invoice.project.userId,
-      },
+      } : null,
     }));
 
     // Get active projects with details for user

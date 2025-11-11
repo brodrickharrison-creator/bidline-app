@@ -104,11 +104,11 @@ export async function uploadInvoiceFile(
       fileSize: file.size,
       fileMimeType: file.type,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Upload invoice file error:", error);
     return {
       success: false,
-      error: error.message || "Failed to upload file",
+      error: error instanceof Error ? error.message : "Failed to upload file",
     };
   }
 }
@@ -143,11 +143,11 @@ export async function getInvoiceFileUrl(
       success: true,
       url: data.signedUrl,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Get invoice file URL error:", error);
     return {
       success: false,
-      error: error.message || "Failed to get file URL",
+      error: error instanceof Error ? error.message : "Failed to get file URL",
     };
   }
 }
@@ -177,11 +177,11 @@ export async function deleteInvoiceFile(
     }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Delete invoice file error:", error);
     return {
       success: false,
-      error: error.message || "Failed to delete file",
+      error: error instanceof Error ? error.message : "Failed to delete file",
     };
   }
 }
@@ -223,11 +223,11 @@ export async function downloadInvoiceFile(
       data,
       fileName,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Download invoice file error:", error);
     return {
       success: false,
-      error: error.message || "Failed to download file",
+      error: error instanceof Error ? error.message : "Failed to download file",
     };
   }
 }

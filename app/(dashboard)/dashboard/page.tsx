@@ -116,7 +116,7 @@ export default async function DashboardPage() {
                   <div key={invoice.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
                       <p className="font-medium text-sm">{invoice.payee?.name || "Unknown Payee"}</p>
-                      <p className="text-xs text-gray-500">{invoice.project.name}</p>
+                      <p className="text-xs text-gray-500">{invoice.project?.name || "Unknown Project"}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-sm">${Number(invoice.amount).toLocaleString()}</p>

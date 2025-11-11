@@ -22,7 +22,7 @@ export default function LoginPage() {
     const result = await login({ email, password });
 
     if (result && !result.success) {
-      setError(result.error);
+      setError(result.error || "Login failed");
       setIsLoading(false);
     } else {
       // Successful login - redirect to dashboard
@@ -87,7 +87,7 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 text-center text-sm text-gray-600">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/signup" className="text-green-600 hover:text-green-700 font-medium">
               Sign up
             </Link>

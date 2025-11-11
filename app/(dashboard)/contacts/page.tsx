@@ -1,11 +1,22 @@
 "use client";
 
 import { Users, Search, Mail, Phone, Plus, Trash2, Edit2, Building2, Briefcase } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { getContacts, createContact, deleteContact, updateContact } from "@/app/actions/contacts";
 
+interface ContactData {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  role: string | null;
+  _count: { invoices: number };
+  totalPaid: number;
+}
+
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<ContactData[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -19,23 +30,23 @@ export default function ContactsPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   // Edit contact
-  const [editingContact, setEditingContact] = useState<any>(null);
+  const [editingContact, setEditingContact] = useState<ContactData | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editCompany, setEditCompany] = useState("");
   const [editRole, setEditRole] = useState("");
 
-  useEffect(() => {
-    loadContacts();
-  }, []);
-
-  const loadContacts = async () => {
+  const loadContacts = useCallback(async () => {
     setIsLoading(true);
     const data = await getContacts();
     setContacts(data);
     setIsLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
 
   const handleCreateContact = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +83,7 @@ export default function ContactsPage() {
     }
   };
 
-  const handleEditClick = (contact: any) => {
+  const handleEditClick = (contact: ContactData) => {
     setEditingContact(contact);
     setEditName(contact.name);
     setEditEmail(contact.email || "");
@@ -84,7 +95,7 @@ export default function ContactsPage() {
   const handleUpdateContact = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!editName.trim() || !editEmail.trim()) return;
+    if (!editName.trim() || !editEmail.trim() || !editingContact) return;
 
     setIsSaving(true);
     const result = await updateContact(editingContact.id, {

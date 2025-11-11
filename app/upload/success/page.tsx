@@ -9,8 +9,9 @@
 import { useSearchParams } from "next/navigation";
 import { CheckCircle, Clock, Flag } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
+import { Suspense } from "react";
 
-export default function UploadSuccessPage() {
+function SuccessContent() {
   const searchParams = useSearchParams();
   const invoiceId = searchParams.get("id");
   const timestamp = searchParams.get("timestamp");
@@ -35,7 +36,7 @@ export default function UploadSuccessPage() {
           </h1>
 
           <p className="text-gray-600 mb-8">
-            We've received your invoice and it's being processed.
+            We&apos;ve received your invoice and it&apos;s being processed.
           </p>
 
           {/* Details */}
@@ -81,7 +82,7 @@ export default function UploadSuccessPage() {
             <ul className="text-xs text-blue-800 space-y-1">
               <li>✓ Your invoice has been matched to your assigned project</li>
               <li>✓ The production team will review your submission</li>
-              <li>✓ You'll be notified once it's approved for payment</li>
+              <li>✓ You&apos;ll be notified once it&apos;s approved for payment</li>
             </ul>
           </div>
 
@@ -108,5 +109,19 @@ export default function UploadSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function UploadSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12 px-4 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-500">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SuccessContent />
+    </Suspense>
   );
 }

@@ -1,29 +1,53 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ArrowLeft, AlertCircle, Check } from "lucide-react";
 import Link from "next/link";
 import { getUnmatchedInvoices, getSuggestedLineItems, assignInvoiceToLineItem } from "@/app/actions/invoices";
 
+interface UnmatchedInvoiceData {
+  id: string;
+  invoiceNumber: string | null;
+  amount: number;
+  createdAt: Date;
+  payee: { id: string; name: string; email: string | null } | null;
+}
+
+interface SuggestedLineData {
+  id: string;
+  category: string;
+  lineNumber: number;
+  name: string;
+  estimate: number;
+  actualSpent: number;
+  projectId: string;
+  project: {
+    id: string;
+    name: string;
+    clientName: string | null;
+    status: string;
+  };
+}
+
 export default function MatchInvoicesPage() {
-  const [unmatchedInvoices, setUnmatchedInvoices] = useState<any[]>([]);
-  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
-  const [suggestedLines, setSuggestedLines] = useState<any[]>([]);
+  const [unmatchedInvoices, setUnmatchedInvoices] = useState<UnmatchedInvoiceData[]>([]);
+  const [selectedInvoice, setSelectedInvoice] = useState<UnmatchedInvoiceData | null>(null);
+  const [suggestedLines, setSuggestedLines] = useState<SuggestedLineData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  useEffect(() => {
-    loadUnmatchedInvoices();
-  }, []);
-
-  const loadUnmatchedInvoices = async () => {
+  const loadUnmatchedInvoices = useCallback(async () => {
     setIsLoading(true);
     const data = await getUnmatchedInvoices();
     setUnmatchedInvoices(data);
     setIsLoading(false);
-  };
+  }, []);
 
-  const handleSelectInvoice = async (invoice: any) => {
+  useEffect(() => {
+    loadUnmatchedInvoices();
+  }, [loadUnmatchedInvoices]);
+
+  const handleSelectInvoice = async (invoice: UnmatchedInvoiceData) => {
     setSelectedInvoice(invoice);
     const suggestions = await getSuggestedLineItems(invoice.id);
     setSuggestedLines(suggestions);

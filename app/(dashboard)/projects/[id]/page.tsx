@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { ArrowLeft, Share2, Check, X, Plus, Download } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { ArrowLeft, Share2, Check, Download, X } from "lucide-react";
 import Link from "next/link";
 import { getProjectById, assignBudgetLinePayee, updateRunningAmount, updateBudgetLineFields, addBudgetLine } from "@/app/actions/projects";
 import { getContacts } from "@/app/actions/contacts";
@@ -9,21 +9,59 @@ import { notFound, useParams, useSearchParams } from "next/navigation";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+interface ProjectData {
+  id: string;
+  name: string;
+  clientName: string | null;
+  projectCode: string | null;
+  totalBudget: number;
+  totalSpent: number;
+  budgetLines: BudgetLineData[];
+  invoices: InvoiceData[];
+}
+
+interface BudgetLineData {
+  id: string;
+  category: string;
+  lineNumber: number;
+  name: string;
+  quantity: number | null;
+  days: number | null;
+  rate: number | null;
+  ot1_5: number | null;
+  ot2: number | null;
+  ot2_5: number | null;
+  estimate: number;
+  runningAmount: number | null;
+  actualSpent: number;
+  payeeId: string | null;
+  payee: { id: string; name: string; email: string | null } | null;
+}
+
+interface InvoiceData {
+  id: string;
+  status: string;
+  budgetLineId: string | null;
+  amount: number;
+}
+
+interface ContactData {
+  id: string;
+  name: string;
+  email: string | null;
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const [project, setProject] = useState<any>(null);
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [project, setProject] = useState<ProjectData | null>(null);
+  const [contacts, setContacts] = useState<ContactData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
   const activeTab = searchParams.get("tab") || "estimate";
 
-  useEffect(() => {
-    loadData();
-  }, [params.id]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const [projectData, contactsData] = await Promise.all([
       getProjectById(params.id as string),
       getContacts(),
@@ -36,7 +74,11 @@ export default function ProjectDetailPage() {
     setProject(projectData);
     setContacts(contactsData);
     setIsLoading(false);
-  };
+  }, [params.id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleShareLink = async () => {
     const uploadUrl = `${window.location.origin}/upload`;
@@ -45,7 +87,7 @@ export default function ProjectDetailPage() {
       await navigator.clipboard.writeText(uploadUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
+    } catch {
       alert("Failed to copy link. Please copy manually: " + uploadUrl);
     }
   };
@@ -77,7 +119,7 @@ export default function ProjectDetailPage() {
     let yPosition = preparedY + 16;
 
     // Group budget lines by category
-    const pdfGroupedLines = project.budgetLines.reduce((acc: Record<string, any[]>, line: any) => {
+    const pdfGroupedLines = project.budgetLines.reduce((acc: Record<string, BudgetLineData[]>, line: BudgetLineData) => {
       if (!acc[line.category]) {
         acc[line.category] = [];
       }
@@ -99,7 +141,7 @@ export default function ProjectDetailPage() {
       yPosition += 6;
 
       // Table data
-      const tableData = lines.map((line: any) => [
+      const tableData = lines.map((line: BudgetLineData) => [
         line.lineNumber,
         line.name,
         Number(line.quantity) || "-",
@@ -139,7 +181,7 @@ export default function ProjectDetailPage() {
         margin: { left: 14 },
       });
 
-      yPosition = (doc as any).lastAutoTable.finalY + 10;
+      yPosition = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
     });
 
     // Total
@@ -165,18 +207,18 @@ export default function ProjectDetailPage() {
     notFound();
   }
 
-  const totalEstimate = project.budgetLines.reduce((sum: number, line: any) => sum + Number(line.estimate), 0);
-  const totalActual = project.budgetLines.reduce((sum: number, line: any) => sum + Number(line.actualSpent), 0);
+  const totalEstimate = project.budgetLines.reduce((sum: number, line: BudgetLineData) => sum + Number(line.estimate), 0);
+  const totalActual = project.budgetLines.reduce((sum: number, line: BudgetLineData) => sum + Number(line.actualSpent), 0);
   const variance = totalEstimate - totalActual;
 
   // Group budget lines by category dynamically
-  const groupedLines = project.budgetLines.reduce((acc: Record<string, any[]>, line: any) => {
+  const groupedLines = project.budgetLines.reduce((acc: Record<string, BudgetLineData[]>, line: BudgetLineData) => {
     if (!acc[line.category]) {
       acc[line.category] = [];
     }
     acc[line.category].push(line);
     return acc;
-  }, {});
+  }, {} as Record<string, BudgetLineData[]>);
 
   // Get unique categories for iteration
   const categories = Object.keys(groupedLines).sort();
@@ -245,11 +287,10 @@ export default function ProjectDetailPage() {
         <div className="p-6">
           {activeTab === "estimate" ? (
             <EstimateTab
-              projectId={params.id}
+              projectId={params.id as string}
               activeTab={activeTab}
               groupedLines={groupedLines}
               categories={categories}
-              totalEstimate={totalEstimate}
               onUpdateFields={async (budgetLineId, fields) => {
                 await updateBudgetLineFields(budgetLineId, fields);
                 loadData(); // Reload data to show updated fields
@@ -262,7 +303,7 @@ export default function ProjectDetailPage() {
             />
           ) : (
             <RunningTab
-              projectId={params.id}
+              projectId={params.id as string}
               activeTab={activeTab}
               groupedLines={groupedLines}
               categories={categories}
@@ -289,26 +330,24 @@ function EstimateTab({
   activeTab,
   groupedLines,
   categories,
-  totalEstimate,
   onUpdateFields,
   onAddLine,
   onExportBid,
 }: {
   projectId: string;
   activeTab: string;
-  groupedLines: any;
+  groupedLines: Record<string, BudgetLineData[]>;
   categories: string[];
-  totalEstimate: number;
-  onUpdateFields: (budgetLineId: string, fields: any) => Promise<void>;
+  onUpdateFields: (budgetLineId: string, fields: Record<string, unknown>) => Promise<void>;
   onAddLine: (category: string) => Promise<void>;
   onExportBid: () => void;
 }) {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<any>({});
+  const [editValues, setEditValues] = useState<Record<string, unknown>>({});
   const [isSaving, setIsSaving] = useState(false);
 
   // Helper function to check if a line has any filled data
-  const hasFilledData = (line: any) => {
+  const hasFilledData = (line: BudgetLineData) => {
     return (
       line.quantity != null ||
       line.days != null ||
@@ -319,7 +358,7 @@ function EstimateTab({
     );
   };
 
-  const handleEditClick = (line: any) => {
+  const handleEditClick = (line: BudgetLineData) => {
     setEditingLineId(line.id);
     setEditValues({
       name: line.name || "New Line Item",
@@ -357,17 +396,23 @@ function EstimateTab({
     if (field === "name") {
       setEditValues({ ...editValues, [field]: value });
     } else {
-      setEditValues({ ...editValues, [field]: parseFloat(value) || 0 });
+      setEditValues({ ...editValues, [field]: value === "" ? 0 : parseFloat(value) || 0 });
     }
   };
 
-  const calculateLiveEstimate = (values: any) => {
-    const quantity = values.quantity || 1; // Default to 1 if blank/0
-    const days = values.days || 0;
-    const rate = values.rate || 0;
-    const ot1_5 = values.ot1_5 || 0;
-    const ot2 = values.ot2 || 0;
-    const ot2_5 = values.ot2_5 || 0;
+  const getInputValue = (key: string): string => {
+    const val = editValues[key];
+    if (val === undefined || val === null) return "";
+    return String(val);
+  };
+
+  const calculateLiveEstimate = (values: Record<string, unknown>) => {
+    const quantity = Number(values.quantity) || 1; // Default to 1 if blank/0
+    const days = Number(values.days) || 0;
+    const rate = Number(values.rate) || 0;
+    const ot1_5 = Number(values.ot1_5) || 0;
+    const ot2 = Number(values.ot2) || 0;
+    const ot2_5 = Number(values.ot2_5) || 0;
 
     return (quantity * days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
   };
@@ -420,18 +465,18 @@ function EstimateTab({
       {(() => {
         const hasAnyFilledLines = categories.some((category) => {
           const lines = groupedLines[category] || [];
-          return lines.some((line: any) => hasFilledData(line));
+          return lines.some((line: BudgetLineData) => hasFilledData(line));
         });
 
         if (!hasAnyFilledLines) {
           return (
             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Plus className="w-8 h-8 text-green-600" />
+                <Download className="w-8 h-8 text-green-600" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No budget lines yet</h3>
               <p className="text-gray-500 mb-6">Start building your estimate by adding budget line items from the categories above</p>
-              <p className="text-sm text-gray-400">Use the "+ Add Line" dropdown to add items to your budget</p>
+              <p className="text-sm text-gray-400">Use the &quot;+ Add Line&quot; dropdown to add items to your budget</p>
             </div>
           );
         }
@@ -442,7 +487,7 @@ function EstimateTab({
       {/* Unified Spreadsheet Table */}
       {categories.some((category) => {
         const lines = groupedLines[category] || [];
-        return lines.some((line: any) => hasFilledData(line));
+        return lines.some((line: BudgetLineData) => hasFilledData(line));
       }) && (
         <div className="overflow-hidden border border-gray-300 rounded-lg">
           <div className="overflow-x-auto">
@@ -465,7 +510,7 @@ function EstimateTab({
               {categories.map((category, catIndex) => {
                 const lines = groupedLines[category] || [];
                 // Filter to only show lines with filled data
-                const filledLines = lines.filter((line: any) => hasFilledData(line));
+                const filledLines = lines.filter((line: BudgetLineData) => hasFilledData(line));
                 // Don't show category if no filled lines
                 if (filledLines.length === 0) return null;
                 const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
@@ -481,7 +526,7 @@ function EstimateTab({
                     </tr>
 
                     {/* Line Items */}
-                    {filledLines.map((line: any) => {
+                    {filledLines.map((line: BudgetLineData) => {
                     const isEditing = editingLineId === line.id;
                     const displayEstimate = isEditing ? calculateLiveEstimate(editValues) : Number(line.estimate);
 
@@ -492,7 +537,7 @@ function EstimateTab({
                           {isEditing ? (
                             <input
                               type="text"
-                              value={editValues.name || ""}
+                              value={String(editValues.name || "")}
                               onChange={(e) => updateEditValue("name", e.target.value)}
                               onKeyDown={(e) => handleKeyDown(e, line.id)}
                               disabled={isSaving}
@@ -506,7 +551,7 @@ function EstimateTab({
                           {isEditing ? (
                             <input
                               type="number"
-                              value={editValues.quantity || ""}
+                              value={getInputValue("quantity")}
                               onChange={(e) => updateEditValue("quantity", e.target.value)}
                               onKeyDown={(e) => handleKeyDown(e, line.id)}
                               disabled={isSaving}
@@ -522,7 +567,7 @@ function EstimateTab({
                           {isEditing ? (
                             <input
                               type="number"
-                              value={editValues.days || ""}
+                              value={getInputValue("days")}
                               onChange={(e) => updateEditValue("days", e.target.value)}
                               onKeyDown={(e) => handleKeyDown(e, line.id)}
                               disabled={isSaving}
@@ -538,7 +583,7 @@ function EstimateTab({
                           {isEditing ? (
                             <input
                               type="number"
-                              value={editValues.rate || ""}
+                              value={getInputValue("rate")}
                               onChange={(e) => updateEditValue("rate", e.target.value)}
                               onKeyDown={(e) => handleKeyDown(e, line.id)}
                               disabled={isSaving}
@@ -554,7 +599,7 @@ function EstimateTab({
                           {isEditing ? (
                             <input
                               type="number"
-                              value={editValues.ot1_5 || ""}
+                              value={getInputValue("ot1_5")}
                               onChange={(e) => updateEditValue("ot1_5", e.target.value)}
                               onKeyDown={(e) => handleKeyDown(e, line.id)}
                               disabled={isSaving}
@@ -570,7 +615,7 @@ function EstimateTab({
                           {isEditing ? (
                             <input
                               type="number"
-                              value={editValues.ot2 || ""}
+                              value={getInputValue("ot2")}
                               onChange={(e) => updateEditValue("ot2", e.target.value)}
                               onKeyDown={(e) => handleKeyDown(e, line.id)}
                               disabled={isSaving}
@@ -586,7 +631,7 @@ function EstimateTab({
                           {isEditing ? (
                             <input
                               type="number"
-                              value={editValues.ot2_5 || ""}
+                              value={getInputValue("ot2_5")}
                               onChange={(e) => updateEditValue("ot2_5", e.target.value)}
                               onKeyDown={(e) => handleKeyDown(e, line.id)}
                               disabled={isSaving}
@@ -668,10 +713,10 @@ function RunningTab({
 }: {
   projectId: string;
   activeTab: string;
-  groupedLines: any;
+  groupedLines: Record<string, BudgetLineData[]>;
   categories: string[];
-  invoices: any[];
-  contacts: any[];
+  invoices: InvoiceData[];
+  contacts: ContactData[];
   onAssignPayee: (budgetLineId: string, payeeId: string | null) => Promise<void>;
   onUpdateRunningAmount: (budgetLineId: string, amount: number | null) => Promise<void>;
 }) {
@@ -681,7 +726,7 @@ function RunningTab({
   const [isSavingRunning, setIsSavingRunning] = useState(false);
 
   // Helper function to check if a line has any filled data
-  const hasFilledData = (line: any) => {
+  const hasFilledData = (line: BudgetLineData) => {
     return (
       line.quantity != null ||
       line.days != null ||
@@ -698,14 +743,14 @@ function RunningTab({
     setEditingLineId(null);
   };
 
-  const handleRunningClick = (line: any) => {
+  const handleRunningClick = (line: BudgetLineData) => {
     setEditingRunningId(line.id);
     setRunningValue(line.runningAmount ? String(line.runningAmount) : "");
   };
 
   const handleRunningChange = async (budgetLineId: string) => {
     const amount = runningValue === "" ? null : parseFloat(runningValue);
-    if (runningValue !== "" && (isNaN(amount!) || amount! < 0)) {
+    if (runningValue !== "" && amount !== null && (isNaN(amount) || amount < 0)) {
       return; // Invalid input, don't save
     }
 
@@ -761,14 +806,14 @@ function RunningTab({
       {(() => {
         const hasAnyFilledLines = categories.some((category) => {
           const lines = groupedLines[category] || [];
-          return lines.some((line: any) => hasFilledData(line));
+          return lines.some((line: BudgetLineData) => hasFilledData(line));
         });
 
         if (!hasAnyFilledLines) {
           return (
             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
               <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Plus className="w-8 h-8 text-purple-600" />
+                <Download className="w-8 h-8 text-purple-600" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No budget lines yet</h3>
               <p className="text-gray-500 mb-6">Switch to the Estimate tab to start building your budget</p>
@@ -788,7 +833,7 @@ function RunningTab({
       {/* Unified Spreadsheet Table */}
       {categories.some((category) => {
         const lines = groupedLines[category] || [];
-        return lines.some((line: any) => hasFilledData(line));
+        return lines.some((line: BudgetLineData) => hasFilledData(line));
       }) && (
         <div className="overflow-hidden border border-gray-300 rounded-lg">
           <div className="overflow-x-auto">
@@ -809,7 +854,7 @@ function RunningTab({
               {categories.map((category, catIndex) => {
                 const lines = groupedLines[category] || [];
                 // Filter to only show lines with filled data
-                const filledLines = lines.filter((line: any) => hasFilledData(line));
+                const filledLines = lines.filter((line: BudgetLineData) => hasFilledData(line));
                 // Don't show category if no filled lines
                 if (filledLines.length === 0) return null;
                 const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
@@ -825,8 +870,8 @@ function RunningTab({
                     </tr>
 
                     {/* Line Items */}
-                    {filledLines.map((line: any) => {
-                    const lineInvoices = invoices.filter((inv) => inv.budgetLineId === line.id);
+                    {filledLines.map((line: BudgetLineData) => {
+                    const lineInvoices = invoices.filter((inv: InvoiceData) => inv.budgetLineId === line.id);
                     const hasInvoices = lineInvoices.length > 0;
                     const variance = Number(line.estimate) - Number(line.actualSpent);
                     const isEditing = editingLineId === line.id;

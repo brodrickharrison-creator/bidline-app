@@ -5,7 +5,7 @@
  * These types ensure type safety and make the data structures clear.
  */
 
-import { ProjectStatus, BudgetCategory, InvoiceStatus } from "@prisma/client";
+import { ProjectStatus, InvoiceStatus } from "@prisma/client";
 
 // ============================================================================
 // USER TYPES
@@ -56,7 +56,7 @@ export interface ProjectSummary extends Project {
 
 export interface BudgetLine {
   id: string;
-  category: BudgetCategory;
+  category: string;
   lineNumber: number;
   name: string;
   quantity: number | null;
@@ -75,7 +75,7 @@ export interface BudgetLine {
 }
 
 export interface BudgetLineInput {
-  category: BudgetCategory;
+  category: string;
   lineNumber: number;
   name: string;
   quantity?: number;

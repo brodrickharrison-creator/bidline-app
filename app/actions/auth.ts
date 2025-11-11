@@ -2,7 +2,6 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
 export async function signup(formData: {
@@ -35,7 +34,7 @@ export async function signup(formData: {
         name: formData.name,
       },
     });
-  } catch (dbError: any) {
+  } catch (dbError: unknown) {
     // If user already exists in database, that's okay
     console.error("Database error:", dbError);
   }

@@ -1,31 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+import { useParams } from "next/navigation";
 import { ArrowLeft, FileText, CheckCircle, Clock, Flag, XCircle, DollarSign } from "lucide-react";
 import Link from "next/link";
 import { getInvoiceById, updateInvoiceStatus } from "@/app/actions/invoices";
 
+interface InvoiceData {
+  id: string;
+  invoiceNumber: string | null;
+  amount: number;
+  status: string;
+  createdAt: Date;
+  payee: { id: string; name: string; email: string | null } | null;
+  project: {
+    id: string;
+    name: string;
+    clientName: string | null;
+  } | null;
+  budgetLine: {
+    id: string;
+    name: string;
+    category: string;
+    lineNumber: number;
+  } | null;
+}
+
 export default function InvoiceDetailsPage() {
   const params = useParams();
-  const router = useRouter();
-  const [invoice, setInvoice] = useState<any>(null);
+  const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showStatusModal, setShowStatusModal] = useState(false);
 
-  useEffect(() => {
-    loadInvoice();
-  }, [params.id]);
-
-  const loadInvoice = async () => {
+  const loadInvoice = useCallback(async () => {
     setIsLoading(true);
     const data = await getInvoiceById(params.id as string);
     setInvoice(data);
     setIsLoading(false);
-  };
+  }, [params.id]);
+
+  useEffect(() => {
+    loadInvoice();
+  }, [loadInvoice]);
 
   const handleStatusUpdate = async (newStatus: string) => {
-    const result = await updateInvoiceStatus(invoice.id, newStatus as any);
+    if (!invoice) return;
+    const result = await updateInvoiceStatus(invoice.id, newStatus as "MISSING" | "WAITING_APPROVAL" | "APPROVED" | "FLAGGED" | "PAID");
     if (result.success) {
       loadInvoice();
       setShowStatusModal(false);
@@ -206,18 +226,22 @@ export default function InvoiceDetailsPage() {
           <div className="space-y-4">
             <div>
               <p className="text-sm text-gray-500 mb-1">Project</p>
-              <Link
-                href={`/projects/${invoice.project.id}`}
-                className="text-base font-medium text-teal-600 hover:text-teal-700"
-              >
-                {invoice.project.name}
-              </Link>
+              {invoice.project ? (
+                <Link
+                  href={`/projects/${invoice.project.id}`}
+                  className="text-base font-medium text-teal-600 hover:text-teal-700"
+                >
+                  {invoice.project.name}
+                </Link>
+              ) : (
+                <p className="text-base font-medium text-gray-400">Unassigned</p>
+              )}
             </div>
 
             <div>
               <p className="text-sm text-gray-500 mb-1">Client</p>
               <p className="text-base font-medium text-gray-900">
-                {invoice.project.clientName || "-"}
+                {invoice.project?.clientName || "-"}
               </p>
             </div>
 

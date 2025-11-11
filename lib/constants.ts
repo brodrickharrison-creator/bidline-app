@@ -5,7 +5,7 @@
  * This makes the codebase easier to maintain and update.
  */
 
-import { ProjectStatus, BudgetCategory, InvoiceStatus } from "@prisma/client";
+import { ProjectStatus, InvoiceStatus } from "@prisma/client";
 
 // ============================================================================
 // PROJECT CONSTANTS
@@ -29,14 +29,16 @@ export const PROJECT_STATUS_COLORS: Record<ProjectStatus, string> = {
 // BUDGET CONSTANTS
 // ============================================================================
 
-export const BUDGET_CATEGORY_LABELS: Record<BudgetCategory, string> = {
+// Note: Budget categories are dynamic strings loaded from LineItemTemplate table
+// These are example categories for reference only
+export const BUDGET_CATEGORY_LABELS: Record<string, string> = {
   PRE_PRODUCTION: "Pre-Production Labor",
   PRODUCTION: "Production Labor",
   POST_PRODUCTION: "Post-Production Labor",
 };
 
 export const BUDGET_CATEGORIES: Array<{
-  key: BudgetCategory;
+  key: string;
   label: string;
 }> = [
   { key: "PRE_PRODUCTION", label: "Pre-Production Labor" },

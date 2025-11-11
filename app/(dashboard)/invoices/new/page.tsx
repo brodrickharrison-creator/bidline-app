@@ -2,20 +2,41 @@
 
 import { ArrowLeft, Upload, Plus } from "lucide-react";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createInvoice } from "@/app/actions/invoices";
 import { getProjects } from "@/app/actions/projects";
 import { getContacts, createContact } from "@/app/actions/contacts";
+
+interface ProjectData {
+  id: string;
+  name: string;
+  clientName: string | null;
+  budgetLines: BudgetLineData[];
+}
+
+interface BudgetLineData {
+  id: string;
+  lineNumber: number;
+  name: string;
+  estimate: number;
+}
+
+interface ContactData {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+}
 
 export default function NewInvoicePage() {
   const router = useRouter();
   const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const preSelectedProjectId = searchParams.get('project');
 
-  const [projects, setProjects] = useState<any[]>([]);
-  const [contacts, setContacts] = useState<any[]>([]);
-  const [budgetLines, setBudgetLines] = useState<any[]>([]);
+  const [projects, setProjects] = useState<ProjectData[]>([]);
+  const [contacts, setContacts] = useState<ContactData[]>([]);
+  const [budgetLines, setBudgetLines] = useState<BudgetLineData[]>([]);
 
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [amount, setAmount] = useState("");
@@ -33,11 +54,7 @@ export default function NewInvoicePage() {
   const [newContactEmail, setNewContactEmail] = useState("");
   const [newContactPhone, setNewContactPhone] = useState("");
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const [projectsData, contactsData] = await Promise.all([
       getProjects(),
       getContacts(),
@@ -47,12 +64,16 @@ export default function NewInvoicePage() {
 
     // If project was pre-selected, load its budget lines
     if (preSelectedProjectId && projectsData.length > 0) {
-      const project = projectsData.find((p: any) => p.id === preSelectedProjectId);
+      const project = projectsData.find((p: ProjectData) => p.id === preSelectedProjectId);
       if (project) {
         setBudgetLines(project.budgetLines || []);
       }
     }
-  };
+  }, [preSelectedProjectId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   useEffect(() => {
     if (projectId) {
@@ -74,8 +95,8 @@ export default function NewInvoicePage() {
 
     const result = await createContact({
       name: newContactName,
-      email: newContactEmail || undefined,
-      phone: newContactPhone || undefined,
+      email: newContactEmail.trim() || "",
+      phone: newContactPhone.trim() || "",
     });
 
     if (result.success && result.contact) {
@@ -119,7 +140,7 @@ export default function NewInvoicePage() {
       } else {
         setError(result.error || "Failed to create invoice");
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred");
     } finally {
       setIsSubmitting(false);
@@ -220,7 +241,7 @@ export default function NewInvoicePage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <option value="">Not assigned to specific line</option>
-                {budgetLines.map((line: any) => (
+                {budgetLines.map((line: BudgetLineData) => (
                   <option key={line.id} value={line.id}>
                     #{line.lineNumber} - {line.name} (${Number(line.estimate).toLocaleString()})
                   </option>
@@ -265,7 +286,7 @@ export default function NewInvoicePage() {
             </label>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value as any)}
+              onChange={(e) => setStatus(e.target.value as "WAITING_APPROVAL" | "APPROVED" | "FLAGGED" | "PAID")}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="WAITING_APPROVAL">Waiting Approval</option>

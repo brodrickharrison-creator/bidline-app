@@ -38,7 +38,7 @@ export default function SignupPage() {
     const result = await signup({ email, password, name });
 
     if (result && !result.success) {
-      setError(result.error);
+      setError(result.error || "Signup failed");
       setIsLoading(false);
     } else {
       // Successful signup - redirect to dashboard

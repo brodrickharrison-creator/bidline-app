@@ -63,7 +63,7 @@ export async function createInvoice(data: CreateInvoiceInput) {
         email: invoiceRaw.payee.email,
         phone: invoiceRaw.payee.phone,
       } : null,
-      project: {
+      project: invoiceRaw.project ? {
         id: invoiceRaw.project.id,
         name: invoiceRaw.project.name,
         clientName: invoiceRaw.project.clientName,
@@ -73,7 +73,7 @@ export async function createInvoice(data: CreateInvoiceInput) {
         createdAt: invoiceRaw.project.createdAt,
         updatedAt: invoiceRaw.project.updatedAt,
         userId: invoiceRaw.project.userId,
-      },
+      } : null,
       budgetLine: invoiceRaw.budgetLine ? {
         id: invoiceRaw.budgetLine.id,
         category: invoiceRaw.budgetLine.category,
@@ -118,7 +118,9 @@ export async function updateInvoiceStatus(
 
     // Update spent amounts when status changes to/from approved/paid
     if (status === "APPROVED" || status === "PAID") {
-      await updateProjectSpent(invoiceRaw.projectId);
+      if (invoiceRaw.projectId) {
+        await updateProjectSpent(invoiceRaw.projectId);
+      }
       if (invoiceRaw.budgetLineId) {
         await updateBudgetLineSpent(invoiceRaw.budgetLineId);
       }
@@ -147,7 +149,7 @@ export async function updateInvoiceStatus(
         email: invoiceRaw.payee.email,
         phone: invoiceRaw.payee.phone,
       } : null,
-      project: {
+      project: invoiceRaw.project ? {
         id: invoiceRaw.project.id,
         name: invoiceRaw.project.name,
         clientName: invoiceRaw.project.clientName,
@@ -157,7 +159,7 @@ export async function updateInvoiceStatus(
         createdAt: invoiceRaw.project.createdAt,
         updatedAt: invoiceRaw.project.updatedAt,
         userId: invoiceRaw.project.userId,
-      },
+      } : null,
       budgetLine: invoiceRaw.budgetLine ? {
         id: invoiceRaw.budgetLine.id,
         category: invoiceRaw.budgetLine.category,
@@ -233,7 +235,7 @@ export async function getInvoices(filters?: {
       return [];
     }
 
-    const where: any = {
+    const where: { project: { userId: string }; projectId?: string; status?: "MISSING" | "WAITING_APPROVAL" | "APPROVED" | "FLAGGED" | "PAID" } = {
       project: {
         userId: user.id,
       },
@@ -245,7 +247,7 @@ export async function getInvoices(filters?: {
 
     // Only add status filter if it's not "All"
     if (filters?.status && filters.status !== "All") {
-      where.status = filters.status.toUpperCase().replace(" ", "_");
+      where.status = filters.status.toUpperCase().replace(" ", "_") as "MISSING" | "WAITING_APPROVAL" | "APPROVED" | "FLAGGED" | "PAID";
     }
 
     const invoices = await prisma.invoice.findMany({
@@ -278,7 +280,7 @@ export async function getInvoices(filters?: {
         email: invoice.payee.email,
         phone: invoice.payee.phone,
       } : null,
-      project: {
+      project: invoice.project ? {
         id: invoice.project.id,
         name: invoice.project.name,
         clientName: invoice.project.clientName,
@@ -288,7 +290,7 @@ export async function getInvoices(filters?: {
         createdAt: invoice.project.createdAt,
         updatedAt: invoice.project.updatedAt,
         userId: invoice.project.userId,
-      },
+      } : null,
       budgetLine: invoice.budgetLine
         ? {
             id: invoice.budgetLine.id,
@@ -361,7 +363,7 @@ export async function getInvoiceById(invoiceId: string) {
         email: invoice.payee.email,
         phone: invoice.payee.phone,
       } : null,
-      project: {
+      project: invoice.project ? {
         id: invoice.project.id,
         name: invoice.project.name,
         clientName: invoice.project.clientName,
@@ -371,7 +373,7 @@ export async function getInvoiceById(invoiceId: string) {
         createdAt: invoice.project.createdAt,
         updatedAt: invoice.project.updatedAt,
         userId: invoice.project.userId,
-      },
+      } : null,
       budgetLine: invoice.budgetLine ? {
         id: invoice.budgetLine.id,
         category: invoice.budgetLine.category,
