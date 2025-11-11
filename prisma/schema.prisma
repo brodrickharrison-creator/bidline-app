@@ -14,15 +14,22 @@ model User {
   id        String    @id @default(cuid())
   email     String    @unique
   name      String?
+  role      UserRole  @default(USER) // Future-proofing for admin access
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   projects  Project[]
   contacts  Contact[]
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 model Project {
   id          String        @id @default(cuid())
   name        String
+  projectCode String        // Producer-assigned unique identifier for invoice matching
   clientName  String?
   status      ProjectStatus @default(PLANNING)
   totalBudget Decimal       @default(0) @db.Decimal(12, 2)
@@ -33,6 +40,9 @@ model Project {
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   budgetLines BudgetLine[]
   invoices    Invoice[]
+
+  @@unique([userId, projectCode]) // Unique per user for invoice auto-matching
+  @@index([projectCode]) // Indexed for fast lookup
 }
 
 enum ProjectStatus {
@@ -89,10 +99,16 @@ model Invoice {
   status        InvoiceStatus @default(MISSING)
   payeeId       String?
   payee         Contact?      @relation(fields: [payeeId], references: [id], onDelete: SetNull)
-  projectId     String
-  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId     String?       // Optional - null until producer assigns invoice
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   budgetLineId  String?
   budgetLine    BudgetLine?   @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
+  // File storage fields
+  fileUrl       String?       // Public URL to access the file
+  filePath      String?       // Storage path: invoices/{userId}/{invoiceId}/{filename}
+  fileName      String?       // Original filename
+  fileSize      Int?          // File size in bytes
+  fileMimeType  String?       // MIME type (e.g., application/pdf)
   paidAt        DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

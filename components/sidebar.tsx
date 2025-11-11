@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   FolderOpen,
   FileText,
   Users,
   Settings,
-  Layers
+  Layers,
+  LogOut,
+  User
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { signout } from "@/app/actions/auth";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -22,7 +25,10 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [stats, setStats] = useState({ activeProjects: 0, pendingInvoices: 0, totalBudget: 0 });
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     // Fetch stats from API
@@ -32,7 +38,22 @@ export function Sidebar() {
       .catch(() => {
         // Silently fail - stats will show 0
       });
+
+    // Fetch current user
+    fetch("/api/current-user")
+      .then((res) => res.json())
+      .then((data) => setUser(data))
+      .catch(() => {
+        // Silently fail
+      });
   }, [pathname]); // Refetch when route changes
+
+  const handleSignOut = async () => {
+    setIsLoggingOut(true);
+    await signout();
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <div className="flex h-screen w-60 flex-col bg-white border-r border-gray-200">
@@ -89,6 +110,29 @@ export function Sidebar() {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* User Profile */}
+      <div className="p-4 border-t border-gray-200">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+            <User className="w-4 h-4 text-gray-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {user?.name || "Loading..."}
+            </p>
+            <p className="text-xs text-gray-500 truncate">{user?.email || ""}</p>
+          </div>
+        </div>
+        <button
+          onClick={handleSignOut}
+          disabled={isLoggingOut}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <LogOut className="w-4 h-4" />
+          {isLoggingOut ? "Signing out..." : "Sign out"}
+        </button>
       </div>
     </div>
   );

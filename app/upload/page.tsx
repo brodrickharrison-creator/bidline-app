@@ -18,7 +18,7 @@ export default function ExternalUploadPage() {
   // Form state
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
-  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [projectCode, setProjectCode] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
   // UI state
@@ -63,6 +63,11 @@ export default function ExternalUploadPage() {
       return;
     }
 
+    if (!projectCode.trim()) {
+      setError("Project code is required");
+      return;
+    }
+
     if (!file) {
       setError("Please select an invoice file");
       return;
@@ -74,7 +79,7 @@ export default function ExternalUploadPage() {
       const result = await uploadExternalInvoice({
         email: email.trim(),
         amount: parseFloat(amount),
-        invoiceNumber: invoiceNumber.trim() || undefined,
+        projectCode: projectCode.trim(),
         fileName: file.name,
       });
 
@@ -200,21 +205,25 @@ export default function ExternalUploadPage() {
               </div>
             </div>
 
-            {/* Invoice Number */}
+            {/* Project Code */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Invoice Number (Optional)
+                Project Code *
               </label>
               <div className="relative">
                 <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
-                  value={invoiceNumber}
-                  onChange={(e) => setInvoiceNumber(e.target.value)}
-                  placeholder="INV-2043"
+                  value={projectCode}
+                  onChange={(e) => setProjectCode(e.target.value)}
+                  placeholder="PROJ-2024-001"
+                  required
                   className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Enter the project code provided by the production team
+              </p>
             </div>
 
             {/* Error Message */}

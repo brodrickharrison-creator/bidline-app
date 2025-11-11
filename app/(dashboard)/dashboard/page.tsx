@@ -100,8 +100,14 @@ export default async function DashboardPage() {
           {stats.recentInvoices.length === 0 ? (
             <div className="p-12 text-center">
               <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 font-medium">No invoices yet</p>
-              <p className="text-sm text-gray-400 mt-1">Invoices will appear here as they're uploaded</p>
+              <p className="text-gray-500 font-medium mb-2">No invoices yet</p>
+              <p className="text-sm text-gray-400 mb-4">Start by creating a project, then upload invoices to track expenses</p>
+              <Link
+                href="/projects/new"
+                className="inline-block px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+              >
+                Create Your First Project
+              </Link>
             </div>
           ) : (
             <div className="p-6">
@@ -143,8 +149,14 @@ export default async function DashboardPage() {
           {stats.activeProjectsList.length === 0 ? (
             <div className="p-12 text-center">
               <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 font-medium">No active projects</p>
-              <p className="text-sm text-gray-400 mt-1">Create a project to get started</p>
+              <p className="text-gray-500 font-medium mb-2">No active projects</p>
+              <p className="text-sm text-gray-400 mb-4">Create a project to start tracking your production budget</p>
+              <Link
+                href="/projects/new"
+                className="inline-block px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+              >
+                + Create Project
+              </Link>
             </div>
           ) : (
             <div className="p-6">

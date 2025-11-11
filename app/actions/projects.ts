@@ -18,10 +18,39 @@ export type BudgetLineInput = {
 
 export async function createProject(formData: {
   name: string;
+  projectCode: string;
   clientName: string;
   budgetLines: BudgetLineInput[];
 }) {
   try {
+    // Get authenticated user
+    const { getCurrentUser } = await import("./auth");
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: "Unauthorized - please log in" };
+    }
+
+    // Validate project code
+    if (!formData.projectCode || formData.projectCode.trim().length === 0) {
+      return { success: false, error: "Project code is required" };
+    }
+
+    // Check if project code already exists for this user
+    const existingProject = await prisma.project.findFirst({
+      where: {
+        userId: user.id,
+        projectCode: formData.projectCode.trim(),
+      },
+    });
+
+    if (existingProject) {
+      return {
+        success: false,
+        error: "Project code already exists. Please choose a different code.",
+      };
+    }
+
     // Calculate total budget from all line items
     const totalBudget = formData.budgetLines.reduce((sum, line) => {
       const quantity = line.quantity ?? 1; // Default to 1 if null/undefined
@@ -35,33 +64,15 @@ export async function createProject(formData: {
       return sum + estimate;
     }, 0);
 
-    // For now, we'll use a hardcoded user ID
-    // TODO: Replace with actual user ID from authentication
-    const userId = "temp-user-id";
-
-    // Check if temp user exists, create if not
-    let user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          id: userId,
-          email: "temp@example.com",
-          name: "Temporary User",
-        },
-      });
-    }
-
     // Create project with budget lines
     const project = await prisma.project.create({
       data: {
         name: formData.name,
+        projectCode: formData.projectCode.trim(),
         clientName: formData.clientName,
         totalBudget,
         status: "PLANNING",
-        userId,
+        userId: user.id,
         budgetLines: {
           create: formData.budgetLines.map((line) => {
             // Use nullish coalescing for calculation only
@@ -108,7 +119,18 @@ export async function createProject(formData: {
 
 export async function getProjects() {
   try {
+    // Get authenticated user
+    const { getCurrentUser } = await import("./auth");
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return [];
+    }
+
     const projects = await prisma.project.findMany({
+      where: {
+        userId: user.id,
+      },
       include: {
         budgetLines: true,
         _count: {
@@ -161,6 +183,14 @@ export async function getProjects() {
 
 export async function getProjectById(id: string) {
   try {
+    // Get authenticated user
+    const { getCurrentUser } = await import("./auth");
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return null;
+    }
+
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
@@ -181,6 +211,11 @@ export async function getProjectById(id: string) {
     });
 
     if (!project) return null;
+
+    // Verify the project belongs to the user
+    if (project.userId !== user.id) {
+      return null;
+    }
 
     // Convert Decimal to number for client component compatibility
     return {
@@ -422,6 +457,24 @@ export async function addBudgetLine(
 
 export async function deleteProject(projectId: string) {
   try {
+    // Get authenticated user
+    const { getCurrentUser } = await import("./auth");
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: "Unauthorized - please log in" };
+    }
+
+    // Verify the project belongs to the user
+    const existingProject = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { userId: true },
+    });
+
+    if (!existingProject || existingProject.userId !== user.id) {
+      return { success: false, error: "Project not found or unauthorized" };
+    }
+
     // Delete the project (cascade will delete budget lines and invoices)
     await prisma.project.delete({
       where: { id: projectId },

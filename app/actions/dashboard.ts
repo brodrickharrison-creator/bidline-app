@@ -1,11 +1,30 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "./auth";
 
 export async function getDashboardStats() {
   try {
-    // Get total budget across all projects
+    // Get authenticated user
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return {
+        totalBudget: 0,
+        totalSpent: 0,
+        variance: 0,
+        activeProjects: 0,
+        pendingInvoices: 0,
+        recentInvoices: [],
+        activeProjectsList: [],
+      };
+    }
+
+    // Get total budget across all user's projects
     const projects = await prisma.project.findMany({
+      where: {
+        userId: user.id,
+      },
       select: {
         totalBudget: true,
         totalSpent: true,
@@ -17,17 +36,25 @@ export async function getDashboardStats() {
     const totalSpent = projects.reduce((sum, p) => sum + Number(p.totalSpent), 0);
     const activeProjects = projects.filter((p) => p.status === "PLANNING" || p.status === "LIVE").length;
 
-    // Get pending invoices count
+    // Get pending invoices count for user's projects
     const pendingInvoices = await prisma.invoice.count({
       where: {
+        project: {
+          userId: user.id,
+        },
         status: {
           in: ["MISSING", "WAITING_APPROVAL"],
         },
       },
     });
 
-    // Get recent invoices
+    // Get recent invoices for user's projects
     const recentInvoicesRaw = await prisma.invoice.findMany({
+      where: {
+        project: {
+          userId: user.id,
+        },
+      },
       take: 5,
       orderBy: {
         createdAt: "desc",
@@ -69,9 +96,10 @@ export async function getDashboardStats() {
       },
     }));
 
-    // Get active projects with details
+    // Get active projects with details for user
     const activeProjectsListRaw = await prisma.project.findMany({
       where: {
+        userId: user.id,
         status: {
           in: ["PLANNING", "LIVE"],
         },

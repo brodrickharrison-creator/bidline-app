@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "./auth";
 
 export async function createContact(data: {
   name: string;
@@ -11,8 +12,12 @@ export async function createContact(data: {
   role?: string;
 }) {
   try {
-    // For now, use temp user ID
-    const userId = "temp-user-id";
+    // Get authenticated user
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: "Unauthorized - please log in" };
+    }
 
     const contact = await prisma.contact.create({
       data: {
@@ -21,7 +26,7 @@ export async function createContact(data: {
         phone: data.phone,
         company: data.company,
         role: data.role,
-        userId,
+        userId: user.id,
       },
     });
 
@@ -36,7 +41,17 @@ export async function createContact(data: {
 
 export async function getContacts() {
   try {
+    // Get authenticated user
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return [];
+    }
+
     const contacts = await prisma.contact.findMany({
+      where: {
+        userId: user.id,
+      },
       include: {
         _count: {
           select: {
@@ -86,6 +101,23 @@ export async function updateContact(
   }
 ) {
   try {
+    // Get authenticated user
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: "Unauthorized - please log in" };
+    }
+
+    // Verify the contact belongs to the user
+    const existingContact = await prisma.contact.findUnique({
+      where: { id },
+      select: { userId: true },
+    });
+
+    if (!existingContact || existingContact.userId !== user.id) {
+      return { success: false, error: "Contact not found or unauthorized" };
+    }
+
     const contact = await prisma.contact.update({
       where: { id },
       data,
@@ -102,6 +134,23 @@ export async function updateContact(
 
 export async function deleteContact(id: string) {
   try {
+    // Get authenticated user
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: "Unauthorized - please log in" };
+    }
+
+    // Verify the contact belongs to the user
+    const existingContact = await prisma.contact.findUnique({
+      where: { id },
+      select: { userId: true },
+    });
+
+    if (!existingContact || existingContact.userId !== user.id) {
+      return { success: false, error: "Contact not found or unauthorized" };
+    }
+
     await prisma.contact.delete({
       where: { id },
     });

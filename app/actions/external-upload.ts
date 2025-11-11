@@ -13,7 +13,7 @@ import { revalidatePath } from "next/cache";
 export interface ExternalInvoiceUpload {
   email: string;
   amount: number;
-  invoiceNumber?: string;
+  projectCode: string;
   fileName?: string;
 }
 
@@ -34,11 +34,12 @@ interface UploadResult {
 /**
  * Handles external invoice upload from public form
  *
- * New Flow (Unassigned Invoices):
+ * Auto-Matching Flow:
  * 1. Find payee by email
- * 2. Create invoice without project or budget line assignment
- * 3. Producer will manually assign to correct line item later
- * 4. Set status to WAITING_APPROVAL
+ * 2. Find project by projectCode (matching the payee's user)
+ * 3. Find budget line within project where payee is assigned (if exists)
+ * 4. Create invoice with project AND budget line assignment (if matched)
+ * 5. Set status to WAITING_APPROVAL for producer review
  */
 export async function uploadExternalInvoice(
   data: ExternalInvoiceUpload
@@ -53,6 +54,11 @@ export async function uploadExternalInvoice(
     // Validate amount
     if (!data.amount || data.amount <= 0) {
       return { success: false, error: "Invalid amount" };
+    }
+
+    // Validate project code
+    if (!data.projectCode || !data.projectCode.trim()) {
+      return { success: false, error: "Project code is required" };
     }
 
     // Find payee by email
@@ -72,25 +78,53 @@ export async function uploadExternalInvoice(
       };
     }
 
-    // Create the invoice WITHOUT project or budget line assignment
-    // Producer will assign it manually later
+    // Find project by projectCode (must belong to the same user as the payee for security)
+    const project = await prisma.project.findFirst({
+      where: {
+        projectCode: data.projectCode.trim(),
+        userId: payee.userId, // Ensure project belongs to the same user as the payee
+      },
+    });
+
+    if (!project) {
+      return {
+        success: false,
+        error: "Project code not found or does not match your account. Please verify the project code with the production team.",
+      };
+    }
+
+    // Try to find a matching budget line within the project where this payee is assigned
+    const matchingBudgetLine = await prisma.budgetLine.findFirst({
+      where: {
+        projectId: project.id,
+        payeeId: payee.id,
+      },
+      orderBy: {
+        createdAt: "asc", // Use the first/oldest budget line if multiple exist
+      },
+    });
+
+    // Create the invoice with project and budget line assignment (if found)
     const invoice = await prisma.invoice.create({
       data: {
-        invoiceNumber: data.invoiceNumber || null,
+        invoiceNumber: null, // Can be set later by producer if needed
         amount: data.amount,
         status: "WAITING_APPROVAL",
         payeeId: payee.id,
-        // Leave projectId and budgetLineId as null - unassigned
+        projectId: project.id, // Auto-assigned based on project code
+        budgetLineId: matchingBudgetLine?.id || null, // Auto-assigned if payee matches a budget line
       },
       include: {
         payee: true,
         project: true,
+        budgetLine: true,
       },
     });
 
     // Revalidate affected pages
     revalidatePath("/invoices");
     revalidatePath("/dashboard");
+    revalidatePath(`/projects/${project.id}`);
 
     return {
       success: true,
@@ -101,7 +135,7 @@ export async function uploadExternalInvoice(
         status: invoice.status,
         createdAt: invoice.createdAt,
         payeeName: invoice.payee?.name || null,
-        projectName: null, // No project assigned yet
+        projectName: invoice.project?.name || null, // Auto-assigned project
       },
     };
   } catch (error) {

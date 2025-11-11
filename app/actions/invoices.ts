@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "./auth";
 
 export type CreateInvoiceInput = {
   invoiceNumber?: string;
@@ -225,13 +226,25 @@ export async function getInvoices(filters?: {
   status?: string;
 }) {
   try {
-    const where: any = {};
+    // Get authenticated user
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return [];
+    }
+
+    const where: any = {
+      project: {
+        userId: user.id,
+      },
+    };
 
     if (filters?.projectId) {
       where.projectId = filters.projectId;
     }
 
-    if (filters?.status && filters.status !== "All Status") {
+    // Only add status filter if it's not "All"
+    if (filters?.status && filters.status !== "All") {
       where.status = filters.status.toUpperCase().replace(" ", "_");
     }
 
@@ -305,6 +318,13 @@ export async function getInvoices(filters?: {
 
 export async function getInvoiceById(invoiceId: string) {
   try {
+    // Get authenticated user
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return null;
+    }
+
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: {
@@ -315,6 +335,11 @@ export async function getInvoiceById(invoiceId: string) {
     });
 
     if (!invoice) {
+      return null;
+    }
+
+    // Verify the invoice belongs to the user's project
+    if (invoice.project && invoice.project.userId !== user.id) {
       return null;
     }
 
@@ -374,12 +399,29 @@ export async function getInvoiceById(invoiceId: string) {
 
 export async function deleteInvoice(invoiceId: string) {
   try {
+    // Get authenticated user
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: "Unauthorized - please log in" };
+    }
+
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
+      include: {
+        project: {
+          select: { userId: true },
+        },
+      },
     });
 
     if (!invoice) {
       return { success: false, error: "Invoice not found" };
+    }
+
+    // Verify the invoice belongs to the user's project
+    if (invoice.project && invoice.project.userId !== user.id) {
+      return { success: false, error: "Unauthorized" };
     }
 
     await prisma.invoice.delete({
@@ -410,9 +452,19 @@ export async function deleteInvoice(invoiceId: string) {
 
 export async function getUnmatchedInvoices() {
   try {
+    // Get authenticated user
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return [];
+    }
+
     const invoices = await prisma.invoice.findMany({
       where: {
         projectId: null, // Unassigned to any project
+        payee: {
+          userId: user.id, // Only show unmatched invoices from user's contacts
+        },
       },
       include: {
         payee: true,
@@ -446,6 +498,13 @@ export async function getUnmatchedInvoices() {
 
 export async function getSuggestedLineItems(invoiceId: string) {
   try {
+    // Get authenticated user
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return [];
+    }
+
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: {
@@ -457,10 +516,13 @@ export async function getSuggestedLineItems(invoiceId: string) {
       return [];
     }
 
-    // Find all budget lines where this payee is assigned
+    // Find all budget lines where this payee is assigned in user's projects
     const budgetLines = await prisma.budgetLine.findMany({
       where: {
         payeeId: invoice.payeeId,
+        project: {
+          userId: user.id,
+        },
       },
       include: {
         project: true,

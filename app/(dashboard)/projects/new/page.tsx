@@ -38,6 +38,7 @@ function calculateEstimate(line: BudgetLine): number {
 export default function NewProjectPage() {
   const router = useRouter();
   const [projectName, setProjectName] = useState("");
+  const [projectCode, setProjectCode] = useState("");
   const [clientName, setClientName] = useState("");
   const [budgetLines, setBudgetLines] = useState<BudgetLine[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -142,12 +143,18 @@ export default function NewProjectPage() {
       return;
     }
 
+    if (!projectCode.trim()) {
+      setError("Project code is required");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
     try {
       const result = await createProject({
         name: projectName,
+        projectCode: projectCode.trim(),
         clientName: clientName || "",
         budgetLines: budgetLines.map((line) => ({
           category: line.category,
@@ -190,7 +197,7 @@ export default function NewProjectPage() {
       <form onSubmit={handleSubmit} className="max-w-6xl">
         <div className="bg-white rounded-xl border border-gray-200 p-8">
           {/* Project Info */}
-          <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Project Name *
@@ -216,6 +223,25 @@ export default function NewProjectPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               />
             </div>
+          </div>
+
+          {/* Project Code */}
+          <div className="mb-8">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Project Code *
+            </label>
+            <input
+              type="text"
+              value={projectCode}
+              onChange={(e) => setProjectCode(e.target.value)}
+              placeholder="e.g., 2025_COKE_SIZZLE"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              required
+              maxLength={50}
+            />
+            <p className="mt-2 text-sm text-gray-500">
+              This code will help match invoices and exports to this budget.
+            </p>
           </div>
 
           {/* Budget Breakdown */}

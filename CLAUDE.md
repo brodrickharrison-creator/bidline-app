@@ -11,10 +11,11 @@ BidLine is a production finance management application for film and video produc
 - **Framework**: Next.js 15 (App Router with Turbopack)
 - **Language**: TypeScript
 - **Database**: PostgreSQL (via Supabase) with Prisma ORM
+- **Authentication**: Supabase Auth (implemented)
+- **Storage**: Supabase Storage for invoice file attachments
 - **Styling**: Tailwind CSS
 - **Icons**: Lucide React
 - **PDF Generation**: jsPDF with autoTable plugin
-- **Authentication**: NextAuth v5 (planned, not yet implemented)
 
 ## Development Commands
 
@@ -50,9 +51,17 @@ npx prisma generate
 
 Using Supabase with Transaction Pooler:
 
-1. Create `.env` file with:
+1. Create `.env.local` file with:
    ```env
+   # Supabase Database (Transaction Pooler - for Prisma)
    DATABASE_URL="postgresql://user:password@host:6543/database?pgbouncer=true"
+
+   # Supabase Auth
+   NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+   NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
+
+   # Supabase Storage (optional, for invoice file uploads)
+   SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
    ```
    **Important**: Use port `6543` (Transaction Pooler) and include `?pgbouncer=true`
 
@@ -61,6 +70,94 @@ Using Supabase with Transaction Pooler:
    npx prisma db push
    npx prisma generate
    ```
+
+3. Seed line item templates:
+   ```bash
+   npm run db:seed
+   ```
+
+### Manual SQL Migrations
+
+Due to pgbouncer connection pooling limitations, certain schema changes require direct SQL execution in Supabase SQL Editor instead of `npx prisma db push`. The following migration files are available in `/prisma/migrations/`:
+
+1. **add-user-role-and-fix-invoice.sql**:
+   - Creates `UserRole` enum (USER, ADMIN)
+   - Adds `role` column to User table with default value 'USER'
+   - Makes `Invoice.projectId` nullable to support unassigned invoices
+
+2. **add-invoice-file-columns.sql**:
+   - Adds file storage columns to Invoice table:
+     - `fileUrl`, `filePath`, `fileName`, `fileSize`, `fileMimeType`
+   - Supports invoice file attachment functionality
+
+**When to use SQL migrations**:
+- When `npx prisma db push` fails with pgbouncer errors
+- When adding columns to existing tables with data
+- When creating custom types or enums
+- After running SQL migration, always regenerate Prisma Client: `npx prisma generate`
+
+## Authentication
+
+**Provider**: Supabase Auth
+
+**Implementation**:
+- Server-side auth utilities in `/lib/supabase/server.ts`
+- Client-side utilities in `/lib/supabase/client.ts`
+- Middleware for protected routes in `/middleware.ts`
+- Login/signup pages at `/login` and `/signup`
+
+**Protected Routes**:
+All routes under `/(dashboard)/*` are protected and redirect unauthenticated users to `/login`:
+- `/dashboard` - Overview and statistics
+- `/projects` - Project list and detail views
+- `/invoices` - Invoice management
+- `/contacts` - Vendor/payee management
+- `/settings` - User preferences
+
+**Authentication Flow**:
+1. Unauthenticated users accessing protected routes are redirected to `/login`
+2. After successful login, users are redirected to `/dashboard`
+3. Root path `/` checks auth status and redirects appropriately
+
+## Supabase Storage
+
+**Purpose**: Secure file storage for invoice attachments (PDFs, images)
+
+**Bucket Configuration**:
+- Bucket name: `invoices`
+- Public access: Disabled (requires authentication)
+- File path structure: `invoices/{userId}/{invoiceId}/{filename}`
+
+**Security (Row Level Security)**:
+- Users can only access files within their own `{userId}` folder
+- Admin users (role = ADMIN) can access all files (future-proofing)
+- Policies enforce user-scoped access for SELECT, INSERT, UPDATE, DELETE operations
+
+**Setup Files**:
+- SQL policies: `/supabase/storage-setup.sql`
+- Storage utilities: `/lib/supabase/storage.ts`
+
+**Storage Utilities** (`/lib/supabase/storage.ts`):
+```typescript
+// Upload file and update invoice record
+uploadInvoiceFile(userId, invoiceId, file)
+
+// Download file with authentication
+downloadInvoiceFile(filePath)
+
+// Generate signed URL for temporary access
+getSignedInvoiceUrl(filePath, expiresIn)
+
+// Delete file from storage
+deleteInvoiceFile(filePath)
+```
+
+**Invoice Schema Fields**:
+- `fileUrl`: Public URL to access the file (signed URL)
+- `filePath`: Storage path for file operations
+- `fileName`: Original filename
+- `fileSize`: File size in bytes
+- `fileMimeType`: MIME type (e.g., application/pdf)
 
 ## Architecture
 
@@ -95,10 +192,13 @@ app/
 ### Database Schema
 
 **Core Models:**
-- **User**: Account owner (future authentication)
+- **User**: Account owner with role-based access (USER, ADMIN)
+  - Role field future-proofed for admin features
 - **Project**: Production with budget tracking
   - Status: PLANNING → LIVE → COMPLETED → ARCHIVED
   - Tracks: `totalBudget`, `totalSpent`
+  - `projectCode`: Required unique identifier per user for invoice auto-matching
+  - Indexed for fast lookup during invoice processing
 - **LineItemTemplate**: Template library for budget line items
   - Contains 276 predefined roles across 16 categories (CAMERA, ART, ELECTRIC, etc.)
   - Seeded from CSV file via `npm run db:seed`
@@ -166,18 +266,34 @@ app/
    - Vendors submit: email, amount, invoice number (optional), file upload
    - System finds Contact by email
    - Creates Invoice with null `projectId`/`budgetLineId` (unassigned)
+   - File is uploaded to Supabase Storage at `invoices/{userId}/{invoiceId}/{filename}`
+   - Invoice record stores file metadata (fileUrl, filePath, fileName, fileSize, fileMimeType)
    - Status: WAITING_APPROVAL
 
 2. **Producer Matching** (`/invoices/match` - internal):
    - Lists all unassigned invoices (where `projectId` is null)
-   - For selected invoice, suggests BudgetLines where payee is assigned
-   - Producer reviews and assigns to correct line item
+   - For selected invoice, suggests BudgetLines using two identifiers:
+     - **Project Code**: Matches `project.projectCode` with invoice metadata
+     - **Payee Email**: Matches `contact.email` with invoice submitter
+   - Producer reviews suggestions and assigns to correct line item
    - Updates `projectId`, `budgetLineId`, recalculates spent amounts
 
+**Auto-Matching System**:
+The invoice auto-matching system uses two identifiers to suggest the correct project and budget line:
+1. **Project Code** (`project.projectCode`):
+   - Required unique identifier assigned by producer during project creation
+   - Unique per user (composite unique constraint on `userId` + `projectCode`)
+   - Indexed for fast lookup during invoice processing
+   - Displayed on project detail page as uneditable field
+   - Can be extracted from invoice metadata or filename
+2. **Payee Email** (`contact.email`):
+   - Matches invoice submitter with assigned contact in budget line
+   - Used to suggest specific budget lines within matched project
+
 **Server Actions:**
-- `uploadExternalInvoice()` - Public invoice submission
+- `uploadExternalInvoice()` - Public invoice submission with file upload
 - `getUnmatchedInvoices()` - Fetch invoices with null projectId
-- `getSuggestedLineItems()` - Find budget lines by payee email
+- `getSuggestedLineItems()` - Find budget lines by project code and payee email
 - `assignInvoiceToLineItem()` - Assign invoice and update actuals
 
 ### Critical: Prisma Decimal Serialization
@@ -285,6 +401,58 @@ Consistent Tailwind color scheme across the application:
 - `sidebar.tsx`: Main navigation with active route highlighting and quick stats
 
 **Pattern**: Most UI is embedded in page components. Future refactoring should extract cards, tables, forms to `/components`.
+
+### Empty State Design
+
+**Purpose**: Provide user-friendly messaging and calls-to-action when users have no data yet.
+
+**Implementation locations**:
+- Dashboard (`/app/(dashboard)/dashboard/page.tsx`):
+  - Shows welcome message when user has no projects
+  - "Create Your First Project" button prominently displayed
+  - Contextual message explaining the platform's purpose
+
+- Project List (`/app/(dashboard)/projects/page.tsx`):
+  - Empty state when user has no projects
+  - "Start a New Budget" button as primary action
+  - Helpful description of what projects are for
+
+- Project Detail (`/app/(dashboard)/projects/[id]/page.tsx`):
+  - Estimate tab: Empty state when no budget lines have filled data
+  - Running tab: Empty state for tracking view
+  - Encourages users to "+ Add Line" to populate budget
+
+**Design Pattern**:
+```typescript
+{items.length === 0 ? (
+  <div className="text-center py-12">
+    <div className="text-gray-400 mb-4">
+      <Icon className="w-16 h-16 mx-auto" />
+    </div>
+    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+      No Items Yet
+    </h3>
+    <p className="text-gray-600 mb-6 max-w-md mx-auto">
+      Helpful description of what to do next
+    </p>
+    <Link
+      href="/path/to/create"
+      className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+    >
+      <Plus className="w-5 h-5" />
+      Create New Item
+    </Link>
+  </div>
+) : (
+  // Render items
+)}
+```
+
+**Key principles**:
+- Use friendly, encouraging language
+- Always provide a clear primary action
+- Include an icon to make the state visually distinct
+- Explain what the user can do and why it's useful
 
 ### UI Design Patterns
 
@@ -605,8 +773,44 @@ const updateEditValue = (field: string, value: string) => {
 **Fix**:
 1. Ensure database has the new column (via `npx prisma db push` or manual SQL)
 2. Regenerate Prisma Client: `npx prisma generate`
-3. Restart dev server to pick up new client
-4. Hard refresh browser (Cmd/Ctrl + Shift + R)
+3. Kill all running dev servers (check for multiple instances)
+4. Restart dev server with clean state: `npm run dev`
+5. Hard refresh browser (Cmd/Ctrl + Shift + R)
+
+**Common Pitfall**: Multiple dev servers running simultaneously (e.g., port 3000 and 3001) can cause caching issues. Use `pkill -f "next dev"` to kill all instances.
+
+### Column Does Not Exist Errors
+
+**Symptom**: `column "User.role" does not exist` or `column "Invoice.fileUrl" does not exist`
+
+**Cause**: Schema file updated but changes not applied to database
+
+**Fix**:
+1. Check if using pgbouncer (port 6543 with `?pgbouncer=true`)
+2. If yes, use manual SQL migration from `/prisma/migrations/` directory
+3. Run migration SQL in Supabase SQL Editor
+4. Regenerate Prisma Client: `npx prisma generate`
+5. Restart dev server
+
+**Why**: pgbouncer connection pooling doesn't support some Prisma migration operations, requiring direct SQL execution.
+
+### Migration "Column Contains Null Values" Error
+
+**Symptom**: `ERROR: 23502: column 'projectCode' of relation 'Project' contains null values`
+
+**Cause**: Attempting to add NOT NULL column to table with existing rows
+
+**Fix**:
+1. Update migration to set default values for existing rows first:
+   ```sql
+   -- Set default values for existing rows
+   UPDATE "Project" SET "projectCode" = id WHERE "projectCode" IS NULL;
+
+   -- Then add NOT NULL constraint
+   ALTER TABLE "Project" ALTER COLUMN "projectCode" SET NOT NULL;
+   ```
+2. Run updated migration in Supabase SQL Editor
+3. Regenerate Prisma Client: `npx prisma generate`
 
 ### Input Field Not Editable (Create Project / Add Line)
 

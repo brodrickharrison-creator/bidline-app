@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.81.0",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.468.0",

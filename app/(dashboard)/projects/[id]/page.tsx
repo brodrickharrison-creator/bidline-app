@@ -66,10 +66,15 @@ export default function ProjectDetailPage() {
     if (project.clientName) {
       doc.text(`Client: ${project.clientName}`, 14, 36);
     }
-    doc.text(`Prepared by: BidLine`, 14, project.clientName ? 42 : 36);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, project.clientName ? 48 : 42);
+    if (project.projectCode) {
+      const codeY = project.clientName ? 42 : 36;
+      doc.text(`Project Code: ${project.projectCode}`, 14, codeY);
+    }
+    const preparedY = project.projectCode ? (project.clientName ? 48 : 42) : (project.clientName ? 42 : 36);
+    doc.text(`Prepared by: BidLine`, 14, preparedY);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, preparedY + 6);
 
-    let yPosition = project.clientName ? 58 : 52;
+    let yPosition = preparedY + 16;
 
     // Group budget lines by category
     const pdfGroupedLines = project.budgetLines.reduce((acc: Record<string, any[]>, line: any) => {
@@ -189,6 +194,9 @@ export default function ProjectDetailPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{project.name}</h1>
           {project.clientName && (
             <p className="text-gray-500">Client: {project.clientName}</p>
+          )}
+          {project.projectCode && (
+            <p className="text-gray-500">Project Code: {project.projectCode}</p>
           )}
         </div>
         <button
@@ -408,45 +416,72 @@ function EstimateTab({
         </select>
       </div>
 
+      {/* Check if there are any filled lines across all categories */}
+      {(() => {
+        const hasAnyFilledLines = categories.some((category) => {
+          const lines = groupedLines[category] || [];
+          return lines.some((line: any) => hasFilledData(line));
+        });
+
+        if (!hasAnyFilledLines) {
+          return (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Plus className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No budget lines yet</h3>
+              <p className="text-gray-500 mb-6">Start building your estimate by adding budget line items from the categories above</p>
+              <p className="text-sm text-gray-400">Use the "+ Add Line" dropdown to add items to your budget</p>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
+
       {/* Unified Spreadsheet Table */}
-      <div className="overflow-hidden border border-gray-300 rounded-lg">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-          <thead className="bg-gray-100 border-b border-gray-300">
-            <tr>
-              <th className="px-3 py-2 text-left font-semibold text-gray-700 w-12 border-r border-gray-300"></th>
-              <th className="px-3 py-2 text-left font-semibold text-gray-700 border-r border-gray-300"></th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">No</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">Days</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-24 border-r border-gray-300">Rate</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">1.5 OT</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2 OT</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2.5 OT</th>
-              <th className="px-3 py-2 text-right font-semibold text-gray-700 w-32 border-r border-gray-300">Estimate</th>
-              <th className="px-3 py-2 w-20"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {categories.map((category, catIndex) => {
-              const lines = groupedLines[category] || [];
-              // Filter to only show lines with filled data
-              const filledLines = lines.filter((line: any) => hasFilledData(line));
-              // Don't show category if no filled lines
-              if (filledLines.length === 0) return null;
-              const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
+      {categories.some((category) => {
+        const lines = groupedLines[category] || [];
+        return lines.some((line: any) => hasFilledData(line));
+      }) && (
+        <div className="overflow-hidden border border-gray-300 rounded-lg">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+            <thead className="bg-gray-100 border-b border-gray-300">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 w-12 border-r border-gray-300"></th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 border-r border-gray-300"></th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">No</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">Days</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-24 border-r border-gray-300">Rate</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">1.5 OT</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2 OT</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2.5 OT</th>
+                <th className="px-3 py-2 text-right font-semibold text-gray-700 w-32 border-r border-gray-300">Estimate</th>
+                <th className="px-3 py-2 w-20"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((category, catIndex) => {
+                const lines = groupedLines[category] || [];
+                // Filter to only show lines with filled data
+                const filledLines = lines.filter((line: any) => hasFilledData(line));
+                // Don't show category if no filled lines
+                if (filledLines.length === 0) return null;
+                const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
 
-              return (
-                <React.Fragment key={category}>
-                  {/* Category Header Row */}
-                  <tr className="bg-gray-50 border-t border-gray-300">
-                    <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
-                    <td colSpan={9} className="px-3 py-2 font-semibold text-gray-700">
-                      {category}
-                    </td>
-                  </tr>
+                return (
+                  <React.Fragment key={category}>
+                    {/* Category Header Row */}
+                    <tr className="bg-gray-50 border-t border-gray-300">
+                      <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
+                      <td colSpan={9} className="px-3 py-2 font-semibold text-gray-700">
+                        {category}
+                      </td>
+                    </tr>
 
-                  {/* Line Items */}
-                  {filledLines.map((line: any) => {
+                    {/* Line Items */}
+                    {filledLines.map((line: any) => {
                     const isEditing = editingLineId === line.id;
                     const displayEstimate = isEditing ? calculateLiveEstimate(editValues) : Number(line.estimate);
 
@@ -597,14 +632,15 @@ function EstimateTab({
                         </td>
                       </tr>
                     );
-                  })}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+      )}
 
     {/* Export Bid Button */}
     <div className="mt-6 flex justify-end">
@@ -721,43 +757,75 @@ function RunningTab({
         </div>
       </div>
 
+      {/* Check if there are any filled lines across all categories */}
+      {(() => {
+        const hasAnyFilledLines = categories.some((category) => {
+          const lines = groupedLines[category] || [];
+          return lines.some((line: any) => hasFilledData(line));
+        });
+
+        if (!hasAnyFilledLines) {
+          return (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Plus className="w-8 h-8 text-purple-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No budget lines yet</h3>
+              <p className="text-gray-500 mb-6">Switch to the Estimate tab to start building your budget</p>
+              <Link
+                href={`/projects/${projectId}?tab=estimate`}
+                className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+              >
+                Go to Estimate
+              </Link>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
+
       {/* Unified Spreadsheet Table */}
-      <div className="overflow-hidden border border-gray-300 rounded-lg">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead className="bg-gray-100 border-b border-gray-300">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700 w-12 border-r border-gray-300"></th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700 border-r border-gray-300"></th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-32 border-r border-gray-300">Payee</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-32 border-r border-gray-300">Invoice Status</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Running</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Estimated</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Actual</th>
-              <th className="px-3 py-2 text-right font-semibold text-gray-700 w-28">Variance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {categories.map((category, catIndex) => {
-              const lines = groupedLines[category] || [];
-              // Filter to only show lines with filled data
-              const filledLines = lines.filter((line: any) => hasFilledData(line));
-              // Don't show category if no filled lines
-              if (filledLines.length === 0) return null;
-              const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
+      {categories.some((category) => {
+        const lines = groupedLines[category] || [];
+        return lines.some((line: any) => hasFilledData(line));
+      }) && (
+        <div className="overflow-hidden border border-gray-300 rounded-lg">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-gray-100 border-b border-gray-300">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700 w-12 border-r border-gray-300"></th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700 border-r border-gray-300"></th>
+                  <th className="px-3 py-2 text-center font-semibold text-gray-700 w-32 border-r border-gray-300">Payee</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-32 border-r border-gray-300">Invoice Status</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Running</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Estimated</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Actual</th>
+                <th className="px-3 py-2 text-right font-semibold text-gray-700 w-28">Variance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((category, catIndex) => {
+                const lines = groupedLines[category] || [];
+                // Filter to only show lines with filled data
+                const filledLines = lines.filter((line: any) => hasFilledData(line));
+                // Don't show category if no filled lines
+                if (filledLines.length === 0) return null;
+                const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
 
-              return (
-                <React.Fragment key={category}>
-                  {/* Category Header Row */}
-                  <tr className="bg-gray-50 border-t border-gray-300">
-                    <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
-                    <td colSpan={7} className="px-3 py-2 font-semibold text-gray-700">
-                      {category}
-                    </td>
-                  </tr>
+                return (
+                  <React.Fragment key={category}>
+                    {/* Category Header Row */}
+                    <tr className="bg-gray-50 border-t border-gray-300">
+                      <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
+                      <td colSpan={7} className="px-3 py-2 font-semibold text-gray-700">
+                        {category}
+                      </td>
+                    </tr>
 
-                  {/* Line Items */}
-                  {filledLines.map((line: any) => {
+                    {/* Line Items */}
+                    {filledLines.map((line: any) => {
                     const lineInvoices = invoices.filter((inv) => inv.budgetLineId === line.id);
                     const hasInvoices = lineInvoices.length > 0;
                     const variance = Number(line.estimate) - Number(line.actualSpent);
@@ -868,14 +936,15 @@ function RunningTab({
                         </td>
                       </tr>
                     );
-                  })}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-          </table>
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
