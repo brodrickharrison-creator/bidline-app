@@ -7,14 +7,14 @@
  * No authentication required - auto-matches based on email.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Upload, FileText, DollarSign, Mail, Hash, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { uploadExternalInvoice } from "@/app/actions/external-upload";
 import { createClient } from "@/lib/supabase/client";
 
-export default function ExternalUploadPage() {
+function UploadFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -298,5 +298,22 @@ export default function ExternalUploadPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ExternalUploadPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12 px-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
+            <FileText className="w-8 h-8 text-white animate-pulse" />
+          </div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <UploadFormContent />
+    </Suspense>
   );
 }
