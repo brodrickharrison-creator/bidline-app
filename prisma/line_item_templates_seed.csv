@@ -1,0 +1,277 @@
+category,role,isDefault,sortOrder
+Pre-Production Labor,Line Producer,True,1
+Pre-Production Labor,Assistant Director,True,2
+Pre-Production Labor,Director of Photography,True,3
+Pre-Production Labor,1st Assistant Camera,True,4
+Pre-Production Labor,2nd Assistant Camera,True,5
+Pre-Production Labor,DIT,True,6
+Pre-Production Labor,Prop Master,True,7
+Pre-Production Labor,Assistant Props,True,8
+Pre-Production Labor,Camera Operator,True,9
+Pre-Production Labor,Gaffer,True,10
+Pre-Production Labor,Best Electric,True,11
+Pre-Production Labor,3rd Electric,True,12
+Pre-Production Labor,Electric/Driver,True,13
+Pre-Production Labor,Prep/Strike/Pre Rig Crew,True,14
+Pre-Production Labor,Key Grip,True,15
+Pre-Production Labor,Best Grip,True,16
+Pre-Production Labor,3rd Grip,True,17
+Pre-Production Labor,Grip/Driver,True,18
+Pre-Production Labor,Crane Tech 2x,True,19
+Pre-Production Labor,Crane Head Tech,True,20
+Pre-Production Labor,Steadi Cam Operator,True,21
+Pre-Production Labor,Choreographer,True,22
+Pre-Production Labor,Make-Up/Hair,True,23
+Pre-Production Labor,Make-Up/Hair Assistant,True,24
+Pre-Production Labor,Wardrobe Stylist,True,25
+Pre-Production Labor,Wardrobe Assistant,True,26
+Pre-Production Labor,Script Supervisor,True,27
+Pre-Production Labor,Boom Operator,True,28
+Pre-Production Labor,Sound Mixer,True,29
+Pre-Production Labor,VTR Operator,True,30
+Pre-Production Labor,Stunt Coordinator,True,31
+Pre-Production Labor,Safety Officer,True,32
+Pre-Production Labor,Site Rep,True,33
+Pre-Production Labor,Storyboard Artist,True,34
+Pre-Production Labor,Catering Crew,True,35
+Pre-Production Labor,Location Scout,True,36
+Pre-Production Labor,2nd Assistant Director,True,37
+Pre-Production Labor,Medic,True,38
+Pre-Production Labor,Craft Services,True,39
+Pre-Production Labor,Firefighter,True,40
+Pre-Production Labor,Police Officers/Rangers/CHP,True,41
+Pre-Production Labor,Welfare/Teacher,True,42
+Pre-Production Labor,Gang Boss,True,43
+Pre-Production Labor,Teamsters Drivers / Animal Wranglers,True,44
+Pre-Production Labor,Production Supervisor,True,45
+Pre-Production Labor,Production Coordinator,True,46
+Pre-Production Labor,Production Assistant,True,47
+Pre-Production Labor,Production Assistant,True,48
+Shooting Labor,Line Producer,True,1
+Shooting Labor,Assistant Director,True,2
+Shooting Labor,Director of Photography,True,3
+Shooting Labor,1st Assistant Camera,True,4
+Shooting Labor,2nd Assistant Camera,True,5
+Shooting Labor,DIT,True,6
+Shooting Labor,Prop Master,True,7
+Shooting Labor,Assistant Props,True,8
+Shooting Labor,Camera Operator,True,9
+Shooting Labor,Gaffer,True,10
+Shooting Labor,Best Electric,True,11
+Shooting Labor,3rd Electric,True,12
+Shooting Labor,Electric/Driver,True,13
+Shooting Labor,Prep/Strike/Pre Rig Crew,True,14
+Shooting Labor,Key Grip,True,15
+Shooting Labor,Best Grip,True,16
+Shooting Labor,3rd Grip,True,17
+Shooting Labor,Grip/Driver,True,18
+Shooting Labor,Crane Tech 2x,True,19
+Shooting Labor,Crane Head Tech,True,20
+Shooting Labor,Steadi Cam Operator,True,21
+Shooting Labor,Choreographer,True,22
+Shooting Labor,Make-Up/Hair,True,23
+Shooting Labor,Make-Up/Hair Assistant,True,24
+Shooting Labor,Wardrobe Stylist,True,25
+Shooting Labor,Wardrobe Assistant,True,26
+Shooting Labor,Script Supervisor,True,27
+Shooting Labor,Boom Operator,True,28
+Shooting Labor,Sound Mixer,True,29
+Shooting Labor,VTR Operator,True,30
+Shooting Labor,Stunt Coordinator,True,31
+Shooting Labor,Safety Officer,True,32
+Shooting Labor,Site Rep,True,33
+Shooting Labor,Storyboard Artist,True,34
+Shooting Labor,Catering Crew,True,35
+Shooting Labor,Location Scout,True,36
+Shooting Labor,2nd Assistant Director,True,37
+Shooting Labor,Medic,True,38
+Shooting Labor,Craft Services,True,39
+Shooting Labor,Firefighter,True,40
+Shooting Labor,Police Officers/Rangers/CHP,True,41
+Shooting Labor,Welfare/Teacher,True,42
+Shooting Labor,Gang Boss,True,43
+Shooting Labor,Teamsters Drivers / Animal Wranglers,True,44
+Shooting Labor,Production Supervisor,True,45
+Shooting Labor,Production Coordinator,True,46
+Shooting Labor,Production Assistant,True,47
+Prep & Wrap Expenses,Craft Services,True,1
+Prep & Wrap Expenses,Per Diems,True,2
+Prep & Wrap Expenses,Hotels,True,3
+Prep & Wrap Expenses,Scouting Expenses,True,4
+Prep & Wrap Expenses,Deliveries & Taxi,True,5
+Prep & Wrap Expenses,Car Rental,True,6
+Prep & Wrap Expenses,Trucking,True,7
+Prep & Wrap Expenses,Casting Director,True,8
+Prep & Wrap Expenses,Casting Facility,True,9
+Prep & Wrap Expenses,Home Econ Supplies,True,10
+Prep & Wrap Expenses,Telephone & Cable,True,11
+Prep & Wrap Expenses,Working Meals,True,12
+Prep & Wrap Expenses,Messengers,True,13
+Location Expenses,Location Fees,True,1
+Location Expenses,Permits,True,2
+Location Expenses,Lane Closures,True,3
+Location Expenses,Set Security,True,4
+Location Expenses,Cargo Van,True,5
+Location Expenses,Production Trucking,True,6
+Location Expenses,Camera Truck,True,7
+Location Expenses,Car Rentals,True,8
+Location Expenses,Bus Rentals,True,9
+Location Expenses,Limousines,True,10
+Location Expenses,Dressing Room Vehicles,True,11
+Location Expenses,Production Motorhome,True,12
+Location Expenses,Other Vehicles,True,13
+Location Expenses,Parking/Tolls/Gas,True,14
+Location Expenses,Excess Bags/Homela (truncated in screenshot),True,15
+Location Expenses,Air Fares,True,16
+Location Expenses,Hotels,True,17
+Location Expenses,Per Diems,True,18
+Location Expenses,Talent Meals,True,19
+Location Expenses,Breakfast,True,20
+Location Expenses,Lunch,True,21
+Location Expenses,Dinner,True,22
+Location Expenses,Cabs / Ubers / Lyfts /  (truncated in screenshot),True,23
+Location Expenses,Kit Rental,True,24
+Location Expenses,Art Work,True,25
+Location Expenses,Sustainable Practices,True,26
+"Props, Wardrobe & Animals",Prop Rental,True,1
+"Props, Wardrobe & Animals",Prop Purchase,True,2
+"Props, Wardrobe & Animals",Prop Fabrication,True,3
+"Props, Wardrobe & Animals",Wardrobe Rental,True,4
+"Props, Wardrobe & Animals",Wardrobe Purchase,True,5
+"Props, Wardrobe & Animals",Costumes,True,6
+"Props, Wardrobe & Animals",Picture Vehicles,True,7
+"Props, Wardrobe & Animals",Animals & Handlers,True,8
+"Props, Wardrobe & Animals",Theatrical Makeup,True,9
+"Props, Wardrobe & Animals",Product Prep / Color Correct,True,10
+"Props, Wardrobe & Animals",Greens,True,11
+Studio Costs,Rental For Build Days,True,1
+Studio Costs,Build OT Hours,True,2
+Studio Costs,Rental for Pre-Light Days,True,3
+Studio Costs,Pre-Light OT Hours,True,4
+Studio Costs,Rental for Shoot Days,True,5
+Studio Costs,Shoot OT Hours,True,6
+Studio Costs,Rental For Strike Days,True,7
+Studio Costs,Strike OT Hours,True,8
+Studio Costs,Generator & Operator,True,9
+Studio Costs,Stage Manager/Studio Security,True,10
+Studio Costs,Power Charges,True,11
+Studio Costs,Misc. Studio Charges,True,12
+Studio Costs,Meals for Crew & Talent,True,13
+Studio Costs,Air Conditioning,True,14
+Studio Costs,Crew Parking,True,15
+Studio Costs,Condor/Scissor Lift,True,16
+Studio Costs,Steeldeck,True,17
+Art Department Labor,Set Dressing Rentals,True,1
+Art Department Labor,Set Dressing Purchases,True,2
+Art Department Labor,Art Department Prod Supplies,True,3
+Art Department Labor,Art Department Kit Rentals,True,4
+Art Department Labor,Special Effects Rentals,True,5
+Art Department Labor,Art Department Trucking,True,6
+Art Department Labor,Outside Construction,True,7
+Art Department Labor,Car Prep,True,8
+Art Department Labor,Art Department Meals,True,9
+Art Department Labor,Messengers/Deliveries,True,10
+Art Department Expenses,Set Dressing Rentals,True,1
+Art Department Expenses,Set Dressing Purchases,True,2
+Art Department Expenses,Art Department Prod Supplies,True,3
+Art Department Expenses,Art Department Kit Rentals,True,4
+Art Department Expenses,Special Effects Rentals,True,5
+Art Department Expenses,Art Department Trucking,True,6
+Art Department Expenses,Outside Construction,True,7
+Art Department Expenses,Car Prep,True,8
+Art Department Expenses,Art Department Meals,True,9
+Art Department Expenses,Messengers/Deliveries,True,10
+Equipment Rental,Camera Rental,True,1
+Equipment Rental,Sound Rental,True,2
+Equipment Rental,Lighting Rental,True,3
+Equipment Rental,Grip Rental,True,4
+Equipment Rental,Generator Rental,True,5
+Equipment Rental,Crane Rental,True,6
+Equipment Rental,VTR Rental,True,7
+Equipment Rental,Walkie Talkie Rental,True,8
+Equipment Rental,Dolly Rental,True,9
+Equipment Rental,SteadiCam,True,10
+Equipment Rental,Helicopter,True,11
+Equipment Rental,Production Supplies,True,12
+Equipment Rental,Jib Arm,True,13
+Equipment Rental,Crane Head,True,14
+Equipment Rental,Camera Car,True,15
+Equipment Rental,Expendables,True,16
+Equipment Rental,Lenses,True,17
+Equipment Rental,Cinedrives,True,18
+Media,Media / Drives,True,1
+Media,Film,True,2
+Media,Transcode / Transfer,True,3
+Media,Process,True,4
+Media,Dailies,True,5
+Misc,Petty Cash,True,1
+Misc,Air Shipping and Carriers,True,2
+Misc,Phones and Cables,True,3
+Misc,Cash Under $15 Each,True,4
+Misc,External Billing Costs,True,5
+Misc,Special Insurance,True,6
+Misc,Cell Phones,True,7
+Misc,Foreign Production Services Co.,True,8
+Directors Fees | Creative Fees,Director Prep,True,1
+Directors Fees | Creative Fees,Director Travel,True,2
+Directors Fees | Creative Fees,Director Shoot,True,3
+Directors Fees | Creative Fees,Director Post,True,4
+Directors Fees | Creative Fees,Fringes,True,5
+Talent Labor,O/C Principals,True,1
+Talent Labor,O/C Principals,True,2
+Talent Labor,O/C Principals,True,3
+Talent Labor,O/C Principals,True,4
+Talent Labor,O/C Principals,True,5
+Talent Labor,O/C Principals,True,6
+Talent Labor,O/C Principals,True,7
+Talent Labor,O/C Principals,True,8
+Talent Labor,O/C Principals,True,9
+Talent Labor,Office Extras,True,10
+Talent Labor,Crowd Extras,True,11
+Talent Labor,General Extras,True,12
+Talent Labor,General Extras,True,13
+Talent Labor,General Extras,True,14
+Talent Labor,General Extras,True,15
+Talent Labor,General Extras,True,16
+Talent Labor,Hand Models,True,17
+Talent Labor,Voice Over,True,18
+Talent Labor,Fitting Fees,True,19
+Talent Labor,Fitting Fees,True,20
+Talent Labor,Audition Fees,True,21
+Talent Labor,Audition Fees,True,22
+Talent Labor,Talent Agency Fees,True,23
+Talent Labor,Talent Payroll Service,True,24
+Talent Labor,Talent Wardrobe Allowance,True,25
+Talent Expenses,Talent Air Fares,True,1
+Talent Expenses,Talent Per Diem,True,2
+Talent Expenses,Talent Ground Transportation,True,3
+Post Production Labor,Post Producer,True,1
+Post Production Labor,Designer,True,2
+Post Production Labor,Offline Editor,True,3
+Post Production Labor,Assistant Editor,True,4
+Post Production Labor,Post Production Assistant,True,5
+Editorial | Finishing | Post Production,Film To Tape Color Correction,True,1
+Editorial | Finishing | Post Production,Tape to Tape Color Correction,True,2
+Editorial | Finishing | Post Production,One-Light Film to Video Transfer,True,3
+Editorial | Finishing | Post Production,Transfer Tape Stock,True,4
+Editorial | Finishing | Post Production,Transfer Dubs,True,5
+Editorial | Finishing | Post Production,Avid Meridien Bay,True,6
+Editorial | Finishing | Post Production,Offline Tape Stock,True,7
+Editorial | Finishing | Post Production,Offline Dubs,True,8
+Editorial | Finishing | Post Production,Digital Graphics,True,9
+Editorial | Finishing | Post Production,Digital Rotoscoping,True,10
+Editorial | Finishing | Post Production,Digital Compositing,True,11
+Editorial | Finishing | Post Production,Online Edit Bay,True,12
+Editorial | Finishing | Post Production,Online Stock,True,13
+Editorial | Finishing | Post Production,Online Dubs,True,14
+Editorial | Finishing | Post Production,Voice-Over / ADR,True,15
+Editorial | Finishing | Post Production,Original Music Compo,True,16
+Editorial | Finishing | Post Production,Music Clearance,True,17
+Editorial | Finishing | Post Production,Music Library Fees,True,18
+Editorial | Finishing | Post Production,Audio Sweetening,True,19
+Editorial | Finishing | Post Production,Audio Stock,True,20
+Editorial | Finishing | Post Production,Client Dubs,True,21
+Editorial | Finishing | Post Production,Standards Conversion,True,22
+Editorial | Finishing | Post Production,Satellite Transmission,True,23
+Editorial | Finishing | Post Production,Stock Footage,True,24
+Editorial | Finishing | Post Production,Hard Drive,True,25

@@ -8,7 +8,7 @@ async function main() {
   console.log("Starting seed process...");
 
   // Read the CSV file
-  const csvPath = path.join(process.cwd(), "../Downloads/line_item_templates_seed.csv");
+  const csvPath = path.join(process.cwd(), "prisma/line_item_templates_seed.csv");
 
   if (!fs.existsSync(csvPath)) {
     throw new Error(`CSV file not found at: ${csvPath}`);

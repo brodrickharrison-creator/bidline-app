@@ -28,6 +28,7 @@ export default function ContactsPage() {
   const [newCompany, setNewCompany] = useState("");
   const [newRole, setNewRole] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Edit contact
   const [editingContact, setEditingContact] = useState<ContactData | null>(null);
@@ -50,8 +51,12 @@ export default function ContactsPage() {
 
   const handleCreateContact = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
-    if (!newName.trim() || !newEmail.trim()) return;
+    if (!newName.trim() || !newEmail.trim()) {
+      setError("Name and email are required");
+      return;
+    }
 
     setIsSaving(true);
     const result = await createContact({
@@ -70,6 +75,9 @@ export default function ContactsPage() {
       setNewPhone("");
       setNewCompany("");
       setNewRole("");
+      setError(null);
+    } else {
+      setError(result.error || "Failed to create contact");
     }
     setIsSaving(false);
   };
@@ -94,8 +102,12 @@ export default function ContactsPage() {
 
   const handleUpdateContact = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
-    if (!editName.trim() || !editEmail.trim() || !editingContact) return;
+    if (!editName.trim() || !editEmail.trim() || !editingContact) {
+      setError("Name and email are required");
+      return;
+    }
 
     setIsSaving(true);
     const result = await updateContact(editingContact.id, {
@@ -114,6 +126,9 @@ export default function ContactsPage() {
       setEditPhone("");
       setEditCompany("");
       setEditRole("");
+      setError(null);
+    } else {
+      setError(result.error || "Failed to update contact");
     }
     setIsSaving(false);
   };
@@ -211,10 +226,18 @@ export default function ContactsPage() {
               />
             </div>
           </div>
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+              {error}
+            </div>
+          )}
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={() => setShowNewContactForm(false)}
+              onClick={() => {
+                setShowNewContactForm(false);
+                setError(null);
+              }}
               className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
             >
               Cancel
@@ -414,10 +437,18 @@ export default function ContactsPage() {
                   />
                 </div>
               </div>
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                  {error}
+                </div>
+              )}
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setEditingContact(null)}
+                  onClick={() => {
+                    setEditingContact(null);
+                    setError(null);
+                  }}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
                 >
                   Cancel
