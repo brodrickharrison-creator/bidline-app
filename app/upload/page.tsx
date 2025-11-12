@@ -7,19 +7,45 @@
  * No authentication required - auto-matches based on email.
  */
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Upload, FileText, DollarSign, Mail, Hash } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Upload, FileText, DollarSign, Mail, Hash, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { uploadExternalInvoice } from "@/app/actions/external-upload";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ExternalUploadPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Form state
+  // Form state - initialize with URL params if available
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [projectCode, setProjectCode] = useState("");
+  const [lineItemId, setLineItemId] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+
+  // Check authentication status
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsAuthenticated(!!session);
+    };
+    checkAuth();
+  }, []);
+
+  // Prefill form from URL parameters
+  useEffect(() => {
+    const urlProjectCode = searchParams.get("projectCode");
+    const urlPayeeEmail = searchParams.get("payeeEmail");
+    const urlLineItemId = searchParams.get("lineItemId");
+
+    if (urlProjectCode) setProjectCode(urlProjectCode);
+    if (urlPayeeEmail) setEmail(urlPayeeEmail);
+    if (urlLineItemId) setLineItemId(urlLineItemId);
+  }, [searchParams]);
 
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,13 +107,20 @@ export default function ExternalUploadPage() {
         amount: parseFloat(amount),
         projectCode: projectCode.trim(),
         fileName: file.name,
+        lineItemId: lineItemId,
       });
 
       if (result.success && result.invoice) {
-        // Redirect to success page with invoice details
-        router.push(
-          `/upload/success?id=${result.invoice.id}&timestamp=${result.invoice.createdAt.toISOString()}`
-        );
+        // Redirect based on authentication status
+        if (isAuthenticated) {
+          // Internal users go back to invoices page
+          router.push("/invoices");
+        } else {
+          // External users see success confirmation
+          router.push(
+            `/upload/success?id=${result.invoice.id}&timestamp=${result.invoice.createdAt.toISOString()}`
+          );
+        }
       } else {
         setError(result.error || "Failed to upload invoice");
       }
@@ -101,16 +134,29 @@ export default function ExternalUploadPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12 px-4">
       <div className="max-w-2xl mx-auto">
+        {/* Back Navigation for Authenticated Users */}
+        {isAuthenticated && (
+          <Link
+            href="/invoices"
+            className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Invoices
+          </Link>
+        )}
+
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
             <FileText className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Submit Your Invoice
+            {isAuthenticated ? "Upload Invoice" : "Submit Your Invoice"}
           </h1>
           <p className="text-gray-600">
-            Upload your invoice - we&apos;ll match it to the right project for you
+            {isAuthenticated
+              ? "Upload an invoice - fields are pre-filled based on project context"
+              : "Upload your invoice - we'll match it to the right project for you"}
           </p>
         </div>
 

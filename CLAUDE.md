@@ -119,6 +119,103 @@ All routes under `/(dashboard)/*` are protected and redirect unauthenticated use
 2. After successful login, users are redirected to `/dashboard`
 3. Root path `/` checks auth status and redirects appropriately
 
+## Supabase Security & Row Level Security (RLS)
+
+### Database Security Implementation
+
+**Status**: ✅ **PRODUCTION-READY** - All tables have RLS enabled with comprehensive user-scoped policies
+
+**Security Model**:
+- All database tables enforce Row Level Security (RLS)
+- Users can only access their own data (user-scoped policies)
+- Server Actions use Service Role key (bypasses RLS for authorized operations)
+- Direct PostgREST API access is secured by RLS policies
+
+**Migration Files** (`/prisma/migrations/`):
+- `enable-rls-policies-fixed.sql` - **APPLIED** - Complete RLS enablement with 19 security policies
+- `SECURITY-FIX-GUIDE.md` - Comprehensive guide for understanding and verifying security implementation
+
+**Critical Implementation Detail - UUID/Text Type Casting**:
+All RLS policies MUST cast `auth.uid()` to text when comparing with Prisma String @id fields:
+```sql
+-- ❌ WRONG - causes "operator does not exist: uuid = text" error
+USING (auth.uid() = "userId")
+
+-- ✅ CORRECT - explicit type casting
+USING (auth.uid()::text = "userId")
+```
+
+**Reason**: Prisma uses `String @id` which generates `TEXT` columns in PostgreSQL, but Supabase `auth.uid()` returns `UUID` type. All comparisons require explicit `::text` casting.
+
+### RLS Policies Summary
+
+**User Table** (2 policies):
+- Users can view/update their own user record only
+- No self-deletion allowed
+
+**Project Table** (4 policies):
+- Users can view/create/update/delete their own projects
+- Prevents access to other users' projects
+
+**BudgetLine Table** (4 policies):
+- Users can view/create/update/delete budget lines from their own projects
+- Uses EXISTS subquery to validate project ownership
+
+**Contact Table** (4 policies):
+- Users can view/create/update/delete their own contacts
+- Direct userId comparison
+
+**Invoice Table** (4 policies):
+- Users can view/create/update/delete invoices from their own projects
+- Special case: Allows viewing/creating unassigned invoices (projectId IS NULL) for external upload flow
+- Uses EXISTS subquery to validate project ownership
+
+**LineItemTemplate Table** (1 policy):
+- All authenticated users can read templates (shared resource)
+- Modifications restricted to service role only (server-side control)
+
+### Verification Queries
+
+Run these in Supabase SQL Editor to verify RLS is working:
+
+```sql
+-- Check RLS is enabled on all tables
+SELECT tablename, rowsecurity
+FROM pg_tables
+WHERE schemaname = 'public'
+  AND tablename IN ('User', 'Project', 'BudgetLine', 'Contact', 'Invoice', 'LineItemTemplate');
+-- All should return rowsecurity = true
+
+-- List all active policies
+SELECT tablename, policyname, cmd
+FROM pg_policies
+WHERE schemaname = 'public'
+ORDER BY tablename, policyname;
+-- Should see 19 policies across 6 tables
+```
+
+### Security Architecture
+
+**Two-Tier Access Control**:
+
+1. **Client-Side Access** (via Supabase client):
+   - Uses `anon` key from `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - All queries respect RLS policies
+   - Users can only see their own data
+   - Used for authentication flows
+
+2. **Server-Side Access** (via Server Actions):
+   - Uses `service_role` key from `SUPABASE_SERVICE_ROLE_KEY`
+   - Bypasses RLS for authorized operations
+   - Validates user identity via `auth.getUser()`
+   - All CRUD operations in `app/actions/*` use this pattern
+
+**External Upload Flow**:
+- Public `/upload` page allows unauthenticated invoice submission
+- Server Action validates and creates invoice with null `projectId`
+- RLS policy allows creating unassigned invoices for external flow
+- Producer later assigns invoice to project via `/invoices/match`
+
 ## Supabase Storage
 
 **Purpose**: Secure file storage for invoice attachments (PDFs, images)

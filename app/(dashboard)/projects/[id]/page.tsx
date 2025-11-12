@@ -309,6 +309,7 @@ export default function ProjectDetailPage() {
               categories={categories}
               invoices={project.invoices}
               contacts={contacts}
+              projectCode={project.projectCode}
               onAssignPayee={async (budgetLineId, payeeId) => {
                 await assignBudgetLinePayee(budgetLineId, payeeId);
                 loadData(); // Reload data to show updated payee
@@ -708,6 +709,7 @@ function RunningTab({
   categories,
   invoices,
   contacts,
+  projectCode,
   onAssignPayee,
   onUpdateRunningAmount,
 }: {
@@ -717,6 +719,7 @@ function RunningTab({
   categories: string[];
   invoices: InvoiceData[];
   contacts: ContactData[];
+  projectCode: string | null;
   onAssignPayee: (budgetLineId: string, payeeId: string | null) => Promise<void>;
   onUpdateRunningAmount: (budgetLineId: string, amount: number | null) => Promise<void>;
 }) {
@@ -924,9 +927,12 @@ function RunningTab({
                               {lineInvoices[0].status.toLowerCase().replace("_", " ")}
                             </Link>
                           ) : (
-                            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
-                              Missing
-                            </span>
+                            <Link
+                              href={`/upload?projectCode=${projectCode || ""}&payeeEmail=${line.payee?.email || ""}&lineItemId=${line.id}`}
+                              className="inline-block px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded hover:bg-orange-200 cursor-pointer transition-all"
+                            >
+                              Missing - Upload
+                            </Link>
                           )}
                         </td>
                         <td className="px-3 py-2 text-center border-r border-gray-300">

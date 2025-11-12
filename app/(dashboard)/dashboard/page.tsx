@@ -15,14 +15,9 @@ export default async function DashboardPage() {
           <h1 className="text-3xl font-bold text-gray-900">Financial Dashboard</h1>
           <p className="text-gray-500 mt-1">Production finance overview and management</p>
         </div>
-        <div className="flex gap-3">
-          <Link href="/invoices/new" className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">
-            Upload Invoice
-          </Link>
-          <Link href="/projects/new" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
-            + New Project
-          </Link>
-        </div>
+        <Link href="/projects/new" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+          + New Project
+        </Link>
       </div>
 
       {/* Stats Cards */}

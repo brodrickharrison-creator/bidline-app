@@ -15,6 +15,7 @@ export interface ExternalInvoiceUpload {
   amount: number;
   projectCode: string;
   fileName?: string;
+  lineItemId?: string | null;
 }
 
 interface UploadResult {
@@ -93,16 +94,37 @@ export async function uploadExternalInvoice(
       };
     }
 
-    // Try to find a matching budget line within the project where this payee is assigned
-    const matchingBudgetLine = await prisma.budgetLine.findFirst({
-      where: {
-        projectId: project.id,
-        payeeId: payee.id,
-      },
-      orderBy: {
-        createdAt: "asc", // Use the first/oldest budget line if multiple exist
-      },
-    });
+    // Determine which budget line to use
+    let budgetLineId: string | null = null;
+
+    if (data.lineItemId) {
+      // If lineItemId is provided, verify it belongs to the correct project and use it
+      const specifiedBudgetLine = await prisma.budgetLine.findFirst({
+        where: {
+          id: data.lineItemId,
+          projectId: project.id, // Ensure it belongs to the matched project
+        },
+      });
+
+      if (specifiedBudgetLine) {
+        budgetLineId = specifiedBudgetLine.id;
+      }
+    }
+
+    // If no specific line item was provided or found, try to auto-match based on payee assignment
+    if (!budgetLineId) {
+      const matchingBudgetLine = await prisma.budgetLine.findFirst({
+        where: {
+          projectId: project.id,
+          payeeId: payee.id,
+        },
+        orderBy: {
+          createdAt: "asc", // Use the first/oldest budget line if multiple exist
+        },
+      });
+
+      budgetLineId = matchingBudgetLine?.id || null;
+    }
 
     // Create the invoice with project and budget line assignment (if found)
     const invoice = await prisma.invoice.create({
@@ -112,7 +134,7 @@ export async function uploadExternalInvoice(
         status: "WAITING_APPROVAL",
         payeeId: payee.id,
         projectId: project.id, // Auto-assigned based on project code
-        budgetLineId: matchingBudgetLine?.id || null, // Auto-assigned if payee matches a budget line
+        budgetLineId: budgetLineId, // Auto-assigned based on URL param or payee match
       },
       include: {
         payee: true,
