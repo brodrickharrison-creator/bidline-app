@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, MoreVertical, Copy, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { createProject } from "@/app/actions/projects";
 import { getDefaultLineItemTemplates } from "@/app/actions/templates";
@@ -21,6 +21,13 @@ type BudgetLine = {
   ot2_5: number | null;
   otHours?: number | null;
   midnightHours?: number | null;
+  fringeRuleId?: string | null;
+};
+
+type FringeRule = {
+  id: string;
+  name: string;
+  percentage: number;
 };
 
 export default function NewProjectPage() {
@@ -29,12 +36,24 @@ export default function NewProjectPage() {
   const [projectCode, setProjectCode] = useState("");
   const [clientName, setClientName] = useState("");
   const [ruleset, setRuleset] = useState<"FLAT_RATE" | "APA">("FLAT_RATE");
+  const [insurancePercent, setInsurancePercent] = useState<number>(0);
+  const [productionFeePercent, setProductionFeePercent] = useState<number>(0);
   const [budgetLines, setBudgetLines] = useState<BudgetLine[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  // Fringe state management
+  const [fringeRules, setFringeRules] = useState<FringeRule[]>([]);
+  const [showFringeForm, setShowFringeForm] = useState(false);
+  const [fringeName, setFringeName] = useState("");
+  const [fringePercentage, setFringePercentage] = useState("");
+  const [editingFringeId, setEditingFringeId] = useState<string | null>(null);
+  const [showFringeAssignModal, setShowFringeAssignModal] = useState(false);
+  const [assigningLineId, setAssigningLineId] = useState<string | null>(null);
 
   // Load line item templates on mount
   useEffect(() => {
@@ -74,6 +93,15 @@ export default function NewProjectPage() {
 
     loadTemplates();
   }, []);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    if (openMenuId) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [openMenuId]);
 
   const updateLine = (id: string, field: keyof BudgetLine, value: string | number) => {
     setBudgetLines((lines) =>
@@ -115,11 +143,90 @@ export default function NewProjectPage() {
 
   const removeLine = (id: string) => {
     setBudgetLines((lines) => lines.filter((line) => line.id !== id));
+    setOpenMenuId(null);
   };
 
-  const totalEstimate = budgetLines.reduce((sum, line) => {
+  const duplicateLine = (id: string) => {
+    const lineToDuplicate = budgetLines.find((line) => line.id === id);
+    if (!lineToDuplicate) return;
+
+    const maxLineNumber = Math.max(...budgetLines.map((l) => l.lineNumber), 0);
+    const duplicatedLine: BudgetLine = {
+      ...lineToDuplicate,
+      id: `line-${Date.now()}`,
+      lineNumber: maxLineNumber + 1,
+      name: `${lineToDuplicate.name} (Copy)`,
+    };
+
+    setBudgetLines([...budgetLines, duplicatedLine]);
+    setOpenMenuId(null);
+  };
+
+  // Fringe management functions
+  const handleAddFringe = () => {
+    const percentage = parseFloat(fringePercentage);
+    if (!fringeName || isNaN(percentage)) {
+      alert("Please enter a valid name and percentage");
+      return;
+    }
+
+    if (editingFringeId) {
+      // Update existing fringe rule
+      setFringeRules(
+        fringeRules.map((rule) =>
+          rule.id === editingFringeId
+            ? { ...rule, name: fringeName, percentage }
+            : rule
+        )
+      );
+    } else {
+      // Add new fringe rule
+      const newRule: FringeRule = {
+        id: `fringe-${Date.now()}`,
+        name: fringeName,
+        percentage,
+      };
+      setFringeRules([...fringeRules, newRule]);
+    }
+
+    setShowFringeForm(false);
+    setEditingFringeId(null);
+    setFringeName("");
+    setFringePercentage("");
+  };
+
+  const handleDeleteFringe = (id: string) => {
+    if (confirm("Delete this fringe rule?")) {
+      setFringeRules(fringeRules.filter((rule) => rule.id !== id));
+      // Remove fringe assignment from any budget lines
+      setBudgetLines(
+        budgetLines.map((line) =>
+          line.fringeRuleId === id ? { ...line, fringeRuleId: null } : line
+        )
+      );
+    }
+  };
+
+  const handleAssignFringe = (lineId: string, fringeRuleId: string | null) => {
+    setBudgetLines(
+      budgetLines.map((line) =>
+        line.id === lineId ? { ...line, fringeRuleId } : line
+      )
+    );
+    setShowFringeAssignModal(false);
+    setAssigningLineId(null);
+    setOpenMenuId(null);
+  };
+
+  // Calculate line items subtotal
+  const lineItemsSubtotal = budgetLines.reduce((sum, line) => {
     return sum + calculateEstimateWithRuleset(line, ruleset);
   }, 0);
+
+  // Calculate Grand Total with insurance and production fee
+  const insuranceAmount = lineItemsSubtotal * (insurancePercent / 100);
+  const productionFeeAmount = lineItemsSubtotal * (productionFeePercent / 100);
+  const totalEstimate = lineItemsSubtotal + insuranceAmount + productionFeeAmount;
 
   // Group lines by category dynamically
   const groupedLines = budgetLines.reduce((acc, line) => {
@@ -152,6 +259,9 @@ export default function NewProjectPage() {
         projectCode: projectCode.trim(),
         clientName: clientName || "",
         ruleset: ruleset,
+        insurancePercent,
+        productionFeePercent,
+        fringeRules: fringeRules,
         budgetLines: budgetLines.map((line) => ({
           category: line.category,
           lineNumber: line.lineNumber,
@@ -162,6 +272,7 @@ export default function NewProjectPage() {
           ot1_5: line.ot1_5,
           ot2: line.ot2,
           ot2_5: line.ot2_5,
+          fringeRuleId: line.fringeRuleId,
         })),
       });
 
@@ -241,7 +352,7 @@ export default function NewProjectPage() {
           </div>
 
           {/* Budget Ruleset Selector */}
-          <div className="mb-8">
+          <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Budget Calculation Ruleset *
             </label>
@@ -262,6 +373,99 @@ export default function NewProjectPage() {
             <p className="mt-1 text-xs text-orange-600 font-medium">
               ⚠️ This cannot be changed after project creation
             </p>
+          </div>
+
+          {/* Project-Level Percentages */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Insurance %</label>
+              <input
+                type="number"
+                value={insurancePercent}
+                onChange={(e) => setInsurancePercent(parseFloat(e.target.value) || 0)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                step="0.01"
+                min="0"
+                max="100"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Production Fee %</label>
+              <input
+                type="number"
+                value={productionFeePercent}
+                onChange={(e) => setProductionFeePercent(parseFloat(e.target.value) || 0)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                step="0.01"
+                min="0"
+                max="100"
+                placeholder="0"
+              />
+            </div>
+          </div>
+
+          {/* Fringe Rules */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-medium text-gray-700">Fringe Rules</label>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFringeForm(true);
+                  setEditingFringeId(null);
+                  setFringeName("");
+                  setFringePercentage("");
+                }}
+                className="text-sm text-green-600 hover:text-green-700 font-medium"
+              >
+                + Add Fringe Rule
+              </button>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              {fringeRules.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-2">
+                  No fringe rules yet. Add one to apply fringe to budget lines.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {fringeRules.map((rule) => (
+                    <div
+                      key={rule.id}
+                      className="flex items-center justify-between bg-white rounded px-3 py-2 border border-gray-200"
+                    >
+                      <span className="text-sm text-gray-700">{rule.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-gray-900">
+                          {rule.percentage}%
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingFringeId(rule.id);
+                              setFringeName(rule.name);
+                              setFringePercentage(rule.percentage.toString());
+                              setShowFringeForm(true);
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFringe(rule.id)}
+                            className="text-xs text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Budget Breakdown */}
@@ -380,7 +584,7 @@ export default function NewProjectPage() {
                                 type="text"
                                 value={line.name}
                                 onChange={(e) => updateLine(line.id, "name", e.target.value)}
-                                className="w-full border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                className="w-full px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 font-medium"
                               />
                             </td>
                             <td className="px-3 py-2 border-r border-gray-300">
@@ -388,7 +592,7 @@ export default function NewProjectPage() {
                                 type="number"
                                 value={line.quantity || ""}
                                 onChange={(e) => updateLine(line.id, "quantity", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                className="w-16 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                                 min="0"
                                 step="1"
                               />
@@ -398,7 +602,7 @@ export default function NewProjectPage() {
                                 type="number"
                                 value={line.days || ""}
                                 onChange={(e) => updateLine(line.id, "days", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                className="w-16 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                                 min="0"
                                 step="0.5"
                               />
@@ -408,7 +612,7 @@ export default function NewProjectPage() {
                                 type="number"
                                 value={line.rate || ""}
                                 onChange={(e) => updateLine(line.id, "rate", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                className="w-20 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                                 min="0"
                                 step="1"
                               />
@@ -420,7 +624,7 @@ export default function NewProjectPage() {
                                     type="number"
                                     value={line.ot1_5 || ""}
                                     onChange={(e) => updateLine(line.id, "ot1_5", e.target.value)}
-                                    className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                    className="w-16 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                                     min="0"
                                     step="0.5"
                                   />
@@ -430,7 +634,7 @@ export default function NewProjectPage() {
                                     type="number"
                                     value={line.ot2 || ""}
                                     onChange={(e) => updateLine(line.id, "ot2", e.target.value)}
-                                    className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                    className="w-16 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                                     min="0"
                                     step="0.5"
                                   />
@@ -440,7 +644,7 @@ export default function NewProjectPage() {
                                     type="number"
                                     value={line.ot2_5 || ""}
                                     onChange={(e) => updateLine(line.id, "ot2_5", e.target.value)}
-                                    className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                    className="w-16 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                                     min="0"
                                     step="0.5"
                                   />
@@ -453,7 +657,7 @@ export default function NewProjectPage() {
                                     type="number"
                                     value={line.otHours || ""}
                                     onChange={(e) => updateLine(line.id, "otHours", e.target.value)}
-                                    className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                    className="w-20 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                                     min="0"
                                     step="0.5"
                                   />
@@ -463,7 +667,7 @@ export default function NewProjectPage() {
                                     type="number"
                                     value={line.midnightHours || ""}
                                     onChange={(e) => updateLine(line.id, "midnightHours", e.target.value)}
-                                    className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                    className="w-24 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                                     min="0"
                                     step="0.5"
                                   />
@@ -473,15 +677,49 @@ export default function NewProjectPage() {
                             <td className="px-3 py-2 text-right font-medium text-sm border-r border-gray-300">
                               ${calculateEstimateWithRuleset(line, ruleset).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 relative">
                               <button
                                 type="button"
-                                onClick={() => removeLine(line.id)}
-                                className="text-gray-400 hover:text-red-600"
-                                title="Remove line"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuId(openMenuId === line.id ? null : line.id);
+                                }}
+                                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <MoreVertical className="w-4 h-4" />
                               </button>
+
+                              {/* Dropdown Menu */}
+                              {openMenuId === line.id && (
+                                <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAssigningLineId(line.id);
+                                      setShowFringeAssignModal(true);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                  >
+                                    Assign Fringe
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => duplicateLine(line.id)}
+                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                  >
+                                    <Copy className="w-4 h-4" />
+                                    Duplicate
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeLine(line.id)}
+                                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -515,9 +753,9 @@ export default function NewProjectPage() {
           )}
 
           {/* Actions */}
-          <div className="flex justify-between items-center pt-6 border-t border-gray-200">
+          <div className="flex justify-between items-center pt-6">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Estimated Total Budget</p>
+              <p className="text-sm text-gray-600 mb-1">Grand Total</p>
               <p className="text-3xl font-bold text-green-600">
                 ${totalEstimate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
@@ -539,6 +777,129 @@ export default function NewProjectPage() {
             </div>
           </div>
         </div>
+
+        {/* Fringe Form Modal */}
+        {showFringeForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                {editingFringeId ? "Edit" : "Add"} Fringe Rule
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={fringeName}
+                    onChange={(e) => setFringeName(e.target.value)}
+                    placeholder="e.g., Fringe A"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Percentage (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={fringePercentage}
+                    onChange={(e) => setFringePercentage(e.target.value)}
+                    placeholder="e.g., 15.5"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFringeForm(false);
+                    setEditingFringeId(null);
+                    setFringeName("");
+                    setFringePercentage("");
+                  }}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddFringe}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  {editingFringeId ? "Update" : "Create"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fringe Assignment Modal */}
+        {showFringeAssignModal && assigningLineId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Assign Fringe Rule
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a fringe rule to apply to this budget line:
+              </p>
+              <div className="space-y-2 mb-6">
+                <button
+                  type="button"
+                  onClick={() => handleAssignFringe(assigningLineId, null)}
+                  className={`w-full px-4 py-3 text-left rounded-lg border transition-colors ${
+                    budgetLines.find((l) => l.id === assigningLineId)?.fringeRuleId === null
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="font-medium">None</span>
+                </button>
+                {fringeRules.map((rule) => (
+                  <button
+                    key={rule.id}
+                    type="button"
+                    onClick={() => handleAssignFringe(assigningLineId, rule.id)}
+                    className={`w-full px-4 py-3 text-left rounded-lg border transition-colors ${
+                      budgetLines.find((l) => l.id === assigningLineId)?.fringeRuleId === rule.id
+                        ? "border-green-500 bg-green-50"
+                        : "border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">{rule.name}</span>
+                      <span className="text-sm text-gray-600">{rule.percentage}%</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {fringeRules.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  No fringe rules available. Create one first.
+                </p>
+              )}
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFringeAssignModal(false);
+                    setAssigningLineId(null);
+                    setOpenMenuId(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { calculateEstimateWithRuleset } from "@/lib/utils";
 
 export type BudgetLineInput = {
   category: string;
@@ -13,6 +14,13 @@ export type BudgetLineInput = {
   ot1_5?: number | null;
   ot2?: number | null;
   ot2_5?: number | null;
+  fringeRuleId?: string | null;
+};
+
+export type FringeRuleInput = {
+  id: string;
+  name: string;
+  percentage: number;
 };
 
 export async function createProject(formData: {
@@ -20,7 +28,10 @@ export async function createProject(formData: {
   projectCode: string;
   clientName: string;
   budgetLines: BudgetLineInput[];
+  fringeRules?: FringeRuleInput[];
   ruleset?: string | null;
+  insurancePercent?: number;
+  productionFeePercent?: number;
 }) {
   try {
     // Get authenticated user
@@ -64,7 +75,7 @@ export async function createProject(formData: {
       return sum + estimate;
     }, 0);
 
-    // Create project with budget lines
+    // Create project with budget lines and fringe rules
     const project = await prisma.project.create({
       data: {
         name: formData.name,
@@ -73,7 +84,15 @@ export async function createProject(formData: {
         totalBudget,
         status: "PLANNING",
         ruleset: formData.ruleset || "FLAT_RATE",
+        insurancePercent: formData.insurancePercent || 0,
+        productionFeePercent: formData.productionFeePercent || 0,
         userId: user.id,
+        fringeRules: formData.fringeRules && formData.fringeRules.length > 0 ? {
+          create: formData.fringeRules.map((rule) => ({
+            name: rule.name,
+            percentage: rule.percentage,
+          })),
+        } : undefined,
         budgetLines: {
           create: formData.budgetLines.map((line) => {
             // Use nullish coalescing for calculation only
@@ -104,8 +123,32 @@ export async function createProject(formData: {
       },
       include: {
         budgetLines: true,
+        fringeRules: true,
       },
     });
+
+    // Map frontend fringe rule IDs to database IDs and update budget lines
+    if (formData.fringeRules && formData.fringeRules.length > 0) {
+      const fringeIdMap = new Map<string, string>();
+      formData.fringeRules.forEach((inputRule, index) => {
+        fringeIdMap.set(inputRule.id, project.fringeRules[index].id);
+      });
+
+      // Update budget lines with correct fringe rule IDs
+      const linesToUpdate = formData.budgetLines
+        .map((line, index) => ({
+          dbLine: project.budgetLines[index],
+          fringeRuleId: line.fringeRuleId ? fringeIdMap.get(line.fringeRuleId) : null,
+        }))
+        .filter((item) => item.fringeRuleId !== null && item.fringeRuleId !== undefined);
+
+      for (const { dbLine, fringeRuleId } of linesToUpdate) {
+        await prisma.budgetLine.update({
+          where: { id: dbLine.id },
+          data: { fringeRuleId },
+        });
+      }
+    }
 
     // Revalidate pages that show project data
     revalidatePath("/projects");
@@ -199,6 +242,7 @@ export async function getProjectById(id: string) {
         budgetLines: {
           include: {
             payee: true,
+            fringeRule: true,
           },
           orderBy: {
             lineNumber: "asc",
@@ -207,6 +251,11 @@ export async function getProjectById(id: string) {
         invoices: {
           include: {
             payee: true,
+          },
+        },
+        fringeRules: {
+          orderBy: {
+            name: "asc",
           },
         },
       },
@@ -225,6 +274,8 @@ export async function getProjectById(id: string) {
       ruleset: project.ruleset,
       totalBudget: Number(project.totalBudget),
       totalSpent: Number(project.totalSpent),
+      insurancePercent: project.insurancePercent ? Number(project.insurancePercent) : 0,
+      productionFeePercent: project.productionFeePercent ? Number(project.productionFeePercent) : 0,
       budgetLines: project.budgetLines.map((line) => ({
         id: line.id,
         category: line.category,
@@ -236,6 +287,8 @@ export async function getProjectById(id: string) {
         ot1_5: line.ot1_5 ? Number(line.ot1_5) : null,
         ot2: line.ot2 ? Number(line.ot2) : null,
         ot2_5: line.ot2_5 ? Number(line.ot2_5) : null,
+        otHours: line.otHours ? Number(line.otHours) : null,
+        midnightHours: line.midnightHours ? Number(line.midnightHours) : null,
         estimate: Number(line.estimate),
         runningAmount: line.runningAmount ? Number(line.runningAmount) : null,
         actualSpent: Number(line.actualSpent),
@@ -247,8 +300,21 @@ export async function getProjectById(id: string) {
           email: line.payee.email,
           phone: line.payee.phone,
         } : null,
+        fringeRuleId: line.fringeRuleId,
+        fringeRule: line.fringeRule ? {
+          id: line.fringeRule.id,
+          name: line.fringeRule.name,
+          percentage: Number(line.fringeRule.percentage),
+          projectId: line.fringeRule.projectId,
+        } : null,
         createdAt: line.createdAt,
         updatedAt: line.updatedAt,
+      })),
+      fringeRules: project.fringeRules.map((rule) => ({
+        id: rule.id,
+        name: rule.name,
+        percentage: Number(rule.percentage),
+        projectId: rule.projectId,
       })),
       invoices: project.invoices.map((invoice) => ({
         ...invoice,
@@ -351,12 +417,18 @@ export async function updateBudgetLineFields(
     ot1_5?: number;
     ot2?: number;
     ot2_5?: number;
+    otHours?: number;
+    midnightHours?: number;
   }
 ) {
   try {
     // Calculate new estimate based on updated fields
     const currentLine = await prisma.budgetLine.findUnique({
       where: { id: budgetLineId },
+      include: {
+        project: true,
+        fringeRule: true,
+      },
     });
 
     if (!currentLine) {
@@ -364,15 +436,27 @@ export async function updateBudgetLineFields(
     }
 
     // Merge current values with updates
-    const quantity = fields.quantity !== undefined ? fields.quantity : Number(currentLine.quantity) || 1;
-    const days = fields.days !== undefined ? fields.days : Number(currentLine.days) || 0;
-    const rate = fields.rate !== undefined ? fields.rate : Number(currentLine.rate) || 0;
-    const ot1_5 = fields.ot1_5 !== undefined ? fields.ot1_5 : Number(currentLine.ot1_5) || 0;
-    const ot2 = fields.ot2 !== undefined ? fields.ot2 : Number(currentLine.ot2) || 0;
-    const ot2_5 = fields.ot2_5 !== undefined ? fields.ot2_5 : Number(currentLine.ot2_5) || 0;
+    const mergedData = {
+      quantity: fields.quantity !== undefined ? fields.quantity : Number(currentLine.quantity) || 0,
+      days: fields.days !== undefined ? fields.days : Number(currentLine.days) || 0,
+      rate: fields.rate !== undefined ? fields.rate : Number(currentLine.rate) || 0,
+      ot1_5: fields.ot1_5 !== undefined ? fields.ot1_5 : Number(currentLine.ot1_5) || 0,
+      ot2: fields.ot2 !== undefined ? fields.ot2 : Number(currentLine.ot2) || 0,
+      ot2_5: fields.ot2_5 !== undefined ? fields.ot2_5 : Number(currentLine.ot2_5) || 0,
+      otHours: fields.otHours !== undefined ? fields.otHours : Number(currentLine.otHours) || 0,
+      midnightHours: fields.midnightHours !== undefined ? fields.midnightHours : Number(currentLine.midnightHours) || 0,
+    };
 
-    // Calculate new estimate
-    const estimate = (quantity * days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
+    // Calculate base estimate using ruleset-aware function
+    const baseEstimate = calculateEstimateWithRuleset(mergedData, currentLine.project.ruleset);
+
+    // Apply fringe if assigned to this line
+    let estimate = baseEstimate;
+    if (currentLine.fringeRule) {
+      const fringePercent = Number(currentLine.fringeRule.percentage);
+      const fringeAmount = baseEstimate * (fringePercent / 100);
+      estimate = baseEstimate + fringeAmount;
+    }
 
     // Update the budget line
     const budgetLineRaw = await prisma.budgetLine.update({
@@ -385,6 +469,8 @@ export async function updateBudgetLineFields(
         ot1_5: fields.ot1_5 !== undefined ? fields.ot1_5 : currentLine.ot1_5,
         ot2: fields.ot2 !== undefined ? fields.ot2 : currentLine.ot2,
         ot2_5: fields.ot2_5 !== undefined ? fields.ot2_5 : currentLine.ot2_5,
+        otHours: fields.otHours !== undefined ? fields.otHours : currentLine.otHours,
+        midnightHours: fields.midnightHours !== undefined ? fields.midnightHours : currentLine.midnightHours,
         estimate,
       },
       include: {
@@ -513,5 +599,154 @@ export async function updateProjectStatus(
   } catch (error) {
     console.error("Failed to update project status:", error);
     return { success: false, error: "Failed to update project status" };
+  }
+}
+
+export async function updateProjectPercentages(
+  projectId: string,
+  insurancePercent: number,
+  productionFeePercent: number
+) {
+  try {
+    // Get authenticated user
+    const { getCurrentUser } = await import("./auth");
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Verify project belongs to user
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { userId: true },
+    });
+
+    if (!project || project.userId !== user.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Update percentages
+    await prisma.project.update({
+      where: { id: projectId },
+      data: {
+        insurancePercent,
+        productionFeePercent,
+      },
+    });
+
+    // Revalidate project page
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath("/projects");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update project percentages:", error);
+    return { success: false, error: "Failed to update percentages" };
+  }
+}
+
+export async function deleteBudgetLine(budgetLineId: string) {
+  try {
+    // Get the budget line to find its project
+    const budgetLine = await prisma.budgetLine.findUnique({
+      where: { id: budgetLineId },
+      select: { projectId: true },
+    });
+
+    if (!budgetLine) {
+      return { success: false, error: "Budget line not found" };
+    }
+
+    // Delete the budget line
+    await prisma.budgetLine.delete({
+      where: { id: budgetLineId },
+    });
+
+    // Recalculate project total budget
+    const allLines = await prisma.budgetLine.findMany({
+      where: { projectId: budgetLine.projectId },
+    });
+
+    const totalBudget = allLines.reduce((sum, line) => sum + Number(line.estimate), 0);
+
+    await prisma.project.update({
+      where: { id: budgetLine.projectId },
+      data: { totalBudget },
+    });
+
+    // Revalidate project pages
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${budgetLine.projectId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to delete budget line:", error);
+    return { success: false, error: "Failed to delete budget line" };
+  }
+}
+
+export async function duplicateBudgetLine(budgetLineId: string) {
+  try {
+    // Get the existing budget line
+    const existingLine = await prisma.budgetLine.findUnique({
+      where: { id: budgetLineId },
+    });
+
+    if (!existingLine) {
+      return { success: false, error: "Budget line not found" };
+    }
+
+    // Get the highest line number for this project
+    const allLines = await prisma.budgetLine.findMany({
+      where: { projectId: existingLine.projectId },
+      orderBy: { lineNumber: "desc" },
+      take: 1,
+    });
+
+    const nextLineNumber = allLines.length > 0 ? allLines[0].lineNumber + 1 : 1;
+
+    // Create duplicate with incremented line number
+    await prisma.budgetLine.create({
+      data: {
+        projectId: existingLine.projectId,
+        category: existingLine.category,
+        lineNumber: nextLineNumber,
+        name: `${existingLine.name} (Copy)`,
+        quantity: existingLine.quantity,
+        days: existingLine.days,
+        rate: existingLine.rate,
+        ot1_5: existingLine.ot1_5,
+        ot2: existingLine.ot2,
+        ot2_5: existingLine.ot2_5,
+        otHours: existingLine.otHours,
+        midnightHours: existingLine.midnightHours,
+        estimate: existingLine.estimate,
+        actualSpent: 0, // Reset actual spent for duplicate
+        runningAmount: null, // Reset running amount for duplicate
+        payeeId: existingLine.payeeId, // Copy payee assignment
+      },
+    });
+
+    // Recalculate project total budget
+    const updatedLines = await prisma.budgetLine.findMany({
+      where: { projectId: existingLine.projectId },
+    });
+
+    const totalBudget = updatedLines.reduce((sum, line) => sum + Number(line.estimate), 0);
+
+    await prisma.project.update({
+      where: { id: existingLine.projectId },
+      data: { totalBudget },
+    });
+
+    // Revalidate project pages
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${existingLine.projectId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to duplicate budget line:", error);
+    return { success: false, error: "Failed to duplicate budget line" };
   }
 }

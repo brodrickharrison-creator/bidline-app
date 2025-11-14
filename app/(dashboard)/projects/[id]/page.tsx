@@ -1,13 +1,21 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Share2, Check, Download, X } from "lucide-react";
+import { ArrowLeft, Share2, Check, Download, MoreVertical, Copy, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { getProjectById, assignBudgetLinePayee, updateRunningAmount, updateBudgetLineFields, addBudgetLine } from "@/app/actions/projects";
+import { getProjectById, assignBudgetLinePayee, updateRunningAmount, updateBudgetLineFields, addBudgetLine, deleteBudgetLine, duplicateBudgetLine, updateProjectPercentages } from "@/app/actions/projects";
 import { getContacts } from "@/app/actions/contacts";
+import { createFringeRule, updateFringeRule, deleteFringeRule, assignFringeToLine } from "@/app/actions/fringe";
 import { notFound, useParams, useSearchParams } from "next/navigation";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+
+interface FringeRuleData {
+  id: string;
+  name: string;
+  percentage: number;
+  projectId: string;
+}
 
 interface ProjectData {
   id: string;
@@ -17,8 +25,11 @@ interface ProjectData {
   ruleset: string;
   totalBudget: number;
   totalSpent: number;
+  insurancePercent: number;
+  productionFeePercent: number;
   budgetLines: BudgetLineData[];
   invoices: InvoiceData[];
+  fringeRules: FringeRuleData[];
 }
 
 interface BudgetLineData {
@@ -39,6 +50,8 @@ interface BudgetLineData {
   actualSpent: number;
   payeeId: string | null;
   payee: { id: string; name: string; email: string | null } | null;
+  fringeRuleId: string | null;
+  fringeRule: FringeRuleData | null;
 }
 
 interface InvoiceData {
@@ -61,6 +74,10 @@ export default function ProjectDetailPage() {
   const [contacts, setContacts] = useState<ContactData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [showFringeForm, setShowFringeForm] = useState(false);
+  const [fringeName, setFringeName] = useState("");
+  const [fringePercentage, setFringePercentage] = useState("");
+  const [editingFringeId, setEditingFringeId] = useState<string | null>(null);
 
   const activeTab = searchParams.get("tab") || "estimate";
 
@@ -244,7 +261,10 @@ export default function ProjectDetailPage() {
     notFound();
   }
 
-  const totalEstimate = project.budgetLines.reduce((sum: number, line: BudgetLineData) => sum + Number(line.estimate), 0);
+  const lineItemsSubtotal = project.budgetLines.reduce((sum: number, line: BudgetLineData) => sum + Number(line.estimate), 0);
+  const insuranceAmount = lineItemsSubtotal * (project.insurancePercent / 100);
+  const productionFeeAmount = lineItemsSubtotal * (project.productionFeePercent / 100);
+  const totalEstimate = lineItemsSubtotal + insuranceAmount + productionFeeAmount;
   const totalActual = project.budgetLines.reduce((sum: number, line: BudgetLineData) => sum + Number(line.actualSpent), 0);
   const variance = totalEstimate - totalActual;
 
@@ -306,24 +326,142 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Stats Summary */}
-      <div className="grid grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-6 gap-6 mb-8">
+        {/* Grand Total */}
         <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <p className="text-sm text-gray-600 mb-1">Estimated Total</p>
-          <p className="text-2xl font-bold">${totalEstimate.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+          <p className="text-sm text-gray-600 mb-1">Grand Total</p>
+          <p className="text-2xl font-bold text-green-600">${totalEstimate.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
         </div>
+
+        {/* Insurance & Production Fee */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <p className="text-sm text-gray-600 mb-3">Fees & Insurance</p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-gray-500">Insurance:</span>
+              {activeTab === "estimate" ? (
+                <input
+                  type="number"
+                  value={project.insurancePercent}
+                  onChange={async (e) => {
+                    const value = parseFloat(e.target.value) || 0;
+                    if (value >= 0 && value <= 100) {
+                      await updateProjectPercentages(project.id, value, project.productionFeePercent);
+                      loadData();
+                    }
+                  }}
+                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                />
+              ) : (
+                <span className="text-xs font-medium">{project.insurancePercent}%</span>
+              )}
+              <span className="text-xs font-semibold">${insuranceAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-gray-500">Prod Fee:</span>
+              {activeTab === "estimate" ? (
+                <input
+                  type="number"
+                  value={project.productionFeePercent}
+                  onChange={async (e) => {
+                    const value = parseFloat(e.target.value) || 0;
+                    if (value >= 0 && value <= 100) {
+                      await updateProjectPercentages(project.id, project.insurancePercent, value);
+                      loadData();
+                    }
+                  }}
+                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                />
+              ) : (
+                <span className="text-xs font-medium">{project.productionFeePercent}%</span>
+              )}
+              <span className="text-xs font-semibold">${productionFeeAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Fringe Rules */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm text-gray-600">Fringe Rules</p>
+            {activeTab === "estimate" && (
+              <button
+                onClick={() => {
+                  setShowFringeForm(true);
+                  setEditingFringeId(null);
+                  setFringeName("");
+                  setFringePercentage("");
+                }}
+                className="text-xs text-green-600 hover:text-green-700"
+              >
+                + Add
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            {project.fringeRules.length === 0 ? (
+              <p className="text-xs text-gray-400">No fringe rules</p>
+            ) : (
+              project.fringeRules.map((rule) => (
+                <div key={rule.id} className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-gray-600">{rule.name}:</span>
+                  <span className="text-xs font-medium">{rule.percentage}%</span>
+                  {activeTab === "estimate" && (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => {
+                          setEditingFringeId(rule.id);
+                          setFringeName(rule.name);
+                          setFringePercentage(rule.percentage.toString());
+                          setShowFringeForm(true);
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm(`Delete fringe rule "${rule.name}"?`)) {
+                            await deleteFringeRule(rule.id);
+                            loadData();
+                          }
+                        }}
+                        className="text-xs text-red-600 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Running Total */}
         <div className="bg-white rounded-xl p-6 border border-gray-200">
           <p className="text-sm text-gray-600 mb-1">Running Total</p>
           <p className="text-2xl font-bold">${totalActual.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
         </div>
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <p className="text-sm text-gray-600 mb-1">Actuals Total</p>
-          <p className="text-2xl font-bold">${Number(project.totalSpent).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-        </div>
+
+        {/* Variance */}
         <div className="bg-white rounded-xl p-6 border border-gray-200">
           <p className="text-sm text-gray-600 mb-1">Variance</p>
           <p className={`text-2xl font-bold ${variance >= 0 ? "text-green-600" : "text-red-600"}`}>
             ${Math.abs(variance).toLocaleString("en-US", { minimumFractionDigits: 2 })}
           </p>
+        </div>
+
+        {/* Actuals Total */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <p className="text-sm text-gray-600 mb-1">Actuals Total</p>
+          <p className="text-2xl font-bold">${Number(project.totalSpent).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
         </div>
       </div>
 
@@ -338,13 +476,27 @@ export default function ProjectDetailPage() {
               project={project}
               groupedLines={groupedLines}
               categories={categories}
+              insurancePercent={project.insurancePercent}
+              productionFeePercent={project.productionFeePercent}
+              lineItemsSubtotal={lineItemsSubtotal}
+              insuranceAmount={insuranceAmount}
+              productionFeeAmount={productionFeeAmount}
+              totalEstimate={totalEstimate}
               onUpdateFields={async (budgetLineId, fields) => {
                 await updateBudgetLineFields(budgetLineId, fields);
                 loadData(); // Reload data to show updated fields
               }}
+              onUpdatePercentages={async (insurancePercent, productionFeePercent) => {
+                await updateProjectPercentages(project.id, insurancePercent, productionFeePercent);
+                loadData(); // Reload data to show updated percentages
+              }}
               onAddLine={async (category) => {
                 await addBudgetLine(project.id, category);
                 loadData(); // Reload data to show new line
+              }}
+              onAssignFringe={async (budgetLineId, fringeRuleId) => {
+                await assignFringeToLine(budgetLineId, fringeRuleId);
+                loadData(); // Reload data to show updated fringe
               }}
               onExportBid={handleExportBid}
             />
@@ -358,6 +510,12 @@ export default function ProjectDetailPage() {
               invoices={project.invoices}
               contacts={contacts}
               projectCode={project.projectCode}
+              insurancePercent={project.insurancePercent}
+              productionFeePercent={project.productionFeePercent}
+              lineItemsSubtotal={lineItemsSubtotal}
+              insuranceAmount={insuranceAmount}
+              productionFeeAmount={productionFeeAmount}
+              totalEstimate={totalEstimate}
               onAssignPayee={async (budgetLineId, payeeId) => {
                 await assignBudgetLinePayee(budgetLineId, payeeId);
                 loadData(); // Reload data to show updated payee
@@ -370,6 +528,83 @@ export default function ProjectDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Fringe Form Modal */}
+      {showFringeForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              {editingFringeId ? "Edit" : "Add"} Fringe Rule
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={fringeName}
+                  onChange={(e) => setFringeName(e.target.value)}
+                  placeholder="e.g., Fringe A"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Percentage (%)
+                </label>
+                <input
+                  type="number"
+                  value={fringePercentage}
+                  onChange={(e) => setFringePercentage(e.target.value)}
+                  placeholder="e.g., 15.5"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowFringeForm(false);
+                  setEditingFringeId(null);
+                  setFringeName("");
+                  setFringePercentage("");
+                }}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const percentage = parseFloat(fringePercentage);
+                  if (!fringeName || isNaN(percentage)) {
+                    alert("Please enter a valid name and percentage");
+                    return;
+                  }
+
+                  if (editingFringeId) {
+                    await updateFringeRule(editingFringeId, fringeName, percentage);
+                  } else {
+                    await createFringeRule(project.id, fringeName, percentage);
+                  }
+
+                  setShowFringeForm(false);
+                  setEditingFringeId(null);
+                  setFringeName("");
+                  setFringePercentage("");
+                  loadData();
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                {editingFringeId ? "Update" : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -380,8 +615,16 @@ function EstimateTab({
   project,
   groupedLines,
   categories,
+  insurancePercent,
+  productionFeePercent,
+  lineItemsSubtotal,
+  insuranceAmount,
+  productionFeeAmount,
+  totalEstimate,
   onUpdateFields,
+  onUpdatePercentages,
   onAddLine,
+  onAssignFringe,
   onExportBid,
 }: {
   projectId: string;
@@ -389,13 +632,29 @@ function EstimateTab({
   project: ProjectData;
   groupedLines: Record<string, BudgetLineData[]>;
   categories: string[];
+  insurancePercent: number;
+  productionFeePercent: number;
+  lineItemsSubtotal: number;
+  insuranceAmount: number;
+  productionFeeAmount: number;
+  totalEstimate: number;
   onUpdateFields: (budgetLineId: string, fields: Record<string, unknown>) => Promise<void>;
+  onUpdatePercentages: (insurancePercent: number, productionFeePercent: number) => Promise<void>;
   onAddLine: (category: string) => Promise<void>;
+  onAssignFringe: (budgetLineId: string, fringeRuleId: string | null) => Promise<void>;
   onExportBid: () => void;
 }) {
-  const [editingLineId, setEditingLineId] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<Record<string, unknown>>({});
-  const [isSaving, setIsSaving] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [localValues, setLocalValues] = useState<Record<string, Record<string, unknown>>>({});
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    if (openMenuId) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [openMenuId]);
 
   // Helper function to check if a line has any filled data
   const hasFilledData = (line: BudgetLineData) => {
@@ -411,65 +670,55 @@ function EstimateTab({
     );
   };
 
-  const handleEditClick = (line: BudgetLineData) => {
-    setEditingLineId(line.id);
-    setEditValues({
-      name: line.name || "New Line Item",
-      quantity: line.quantity || 0,
-      days: line.days || 0,
-      rate: line.rate || 0,
-      ot1_5: line.ot1_5 || 0,
-      ot2: line.ot2 || 0,
-      ot2_5: line.ot2_5 || 0,
-      otHours: line.otHours || 0,
-      midnightHours: line.midnightHours || 0,
-    });
+  // Get current value for a field (local or from line data)
+  const getFieldValue = (lineId: string, field: string, line: BudgetLineData): string => {
+    if (localValues[lineId] && localValues[lineId][field] !== undefined) {
+      return String(localValues[lineId][field]);
+    }
+    const value = (line as unknown as Record<string, unknown>)[field];
+    if (value === null || value === undefined) return "";
+    return String(value);
   };
 
-  const handleSave = async (lineId: string) => {
-    setIsSaving(true);
-    await onUpdateFields(lineId, editValues);
-    setIsSaving(false);
-    setEditingLineId(null);
-    setEditValues({});
+  // Handle field change (update local state)
+  const handleFieldChange = (lineId: string, field: string, value: string) => {
+    setLocalValues((prev) => ({
+      ...prev,
+      [lineId]: {
+        ...prev[lineId],
+        [field]: field === "name" ? value : (value === "" ? 0 : parseFloat(value) || 0),
+      },
+    }));
   };
 
-  const handleCancel = () => {
-    setEditingLineId(null);
-    setEditValues({});
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent, lineId: string) => {
-    if (e.key === "Enter") {
-      handleSave(lineId);
-    } else if (e.key === "Escape") {
-      handleCancel();
+  // Handle field blur (save to server)
+  const handleFieldBlur = async (lineId: string, field: string) => {
+    if (localValues[lineId] && localValues[lineId][field] !== undefined) {
+      await onUpdateFields(lineId, { [field]: localValues[lineId][field] });
+      // Clear local state after save
+      setLocalValues((prev) => {
+        const newValues = { ...prev };
+        if (newValues[lineId]) {
+          delete newValues[lineId][field];
+          if (Object.keys(newValues[lineId]).length === 0) {
+            delete newValues[lineId];
+          }
+        }
+        return newValues;
+      });
     }
   };
 
-  const updateEditValue = (field: string, value: string) => {
-    if (field === "name") {
-      setEditValues({ ...editValues, [field]: value });
-    } else {
-      setEditValues({ ...editValues, [field]: value === "" ? 0 : parseFloat(value) || 0 });
-    }
+  // Handle duplicate
+  const handleDuplicate = async (lineId: string) => {
+    setOpenMenuId(null);
+    await duplicateBudgetLine(lineId);
   };
 
-  const getInputValue = (key: string): string => {
-    const val = editValues[key];
-    if (val === undefined || val === null) return "";
-    return String(val);
-  };
-
-  const calculateLiveEstimate = (values: Record<string, unknown>) => {
-    const quantity = Number(values.quantity) || 1; // Default to 1 if blank/0
-    const days = Number(values.days) || 0;
-    const rate = Number(values.rate) || 0;
-    const ot1_5 = Number(values.ot1_5) || 0;
-    const ot2 = Number(values.ot2) || 0;
-    const ot2_5 = Number(values.ot2_5) || 0;
-
-    return (quantity * days * rate) + (ot1_5 * rate * 1.5) + (ot2 * rate * 2) + (ot2_5 * rate * 2.5);
+  // Handle delete
+  const handleDelete = async (lineId: string) => {
+    setOpenMenuId(null);
+    await deleteBudgetLine(lineId);
   };
 
   return (
@@ -576,6 +825,7 @@ function EstimateTab({
                   </>
                 )}
                 <th className="px-3 py-2 text-right font-semibold text-gray-700 w-32 border-r border-gray-300">Estimate</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 w-32 border-r border-gray-300">Fringe</th>
                 <th className="px-3 py-2 w-20"></th>
               </tr>
             </thead>
@@ -598,198 +848,169 @@ function EstimateTab({
                     {/* Category Header Row */}
                     <tr className="bg-gray-50 border-t border-gray-300">
                       <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
-                      <td colSpan={9} className="px-3 py-2 font-semibold text-gray-700">
+                      <td colSpan={10} className="px-3 py-2 font-semibold text-gray-700">
                         {category}
                       </td>
                     </tr>
 
                     {/* Line Items */}
                     {filledLines.map((line: BudgetLineData) => {
-                    const isEditing = editingLineId === line.id;
-                    const displayEstimate = isEditing ? calculateLiveEstimate(editValues) : Number(line.estimate);
-
                     return (
                       <tr key={line.id} className="border-t border-gray-200 hover:bg-gray-50">
                         <td className="px-3 py-2 text-gray-500 text-center border-r border-gray-300">{line.lineNumber}</td>
                         <td className="px-3 py-2 border-r border-gray-300">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={String(editValues.name || "")}
-                              onChange={(e) => updateEditValue("name", e.target.value)}
-                              onKeyDown={(e) => handleKeyDown(e, line.id)}
-                              disabled={isSaving}
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                            />
-                          ) : (
-                            <span className="font-medium">{line.name}</span>
-                          )}
+                          <input
+                            type="text"
+                            value={getFieldValue(line.id, "name", line)}
+                            onChange={(e) => handleFieldChange(line.id, "name", e.target.value)}
+                            onBlur={() => handleFieldBlur(line.id, "name")}
+                            className="w-full px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 font-medium"
+                          />
                         </td>
                         <td className="px-3 py-2 text-center border-r border-gray-300">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={getInputValue("quantity")}
-                              onChange={(e) => updateEditValue("quantity", e.target.value)}
-                              onKeyDown={(e) => handleKeyDown(e, line.id)}
-                              disabled={isSaving}
-                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                              step="1"
-                              min="0"
-                            />
-                          ) : (
-                            <span>{Number(line.quantity) || "-"}</span>
-                          )}
+                          <input
+                            type="number"
+                            value={getFieldValue(line.id, "quantity", line)}
+                            onChange={(e) => handleFieldChange(line.id, "quantity", e.target.value)}
+                            onBlur={() => handleFieldBlur(line.id, "quantity")}
+                            className="w-16 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                            step="1"
+                            min="0"
+                          />
                         </td>
                         <td className="px-3 py-2 text-center border-r border-gray-300">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={getInputValue("days")}
-                              onChange={(e) => updateEditValue("days", e.target.value)}
-                              onKeyDown={(e) => handleKeyDown(e, line.id)}
-                              disabled={isSaving}
-                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                              step="0.5"
-                              min="0"
-                            />
-                          ) : (
-                            <span>{Number(line.days) || "-"}</span>
-                          )}
+                          <input
+                            type="number"
+                            value={getFieldValue(line.id, "days", line)}
+                            onChange={(e) => handleFieldChange(line.id, "days", e.target.value)}
+                            onBlur={() => handleFieldBlur(line.id, "days")}
+                            className="w-16 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                            step="0.5"
+                            min="0"
+                          />
                         </td>
                         <td className="px-3 py-2 text-center border-r border-gray-300">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={getInputValue("rate")}
-                              onChange={(e) => updateEditValue("rate", e.target.value)}
-                              onKeyDown={(e) => handleKeyDown(e, line.id)}
-                              disabled={isSaving}
-                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                              step="1"
-                              min="0"
-                            />
-                          ) : (
-                            <span>${Number(line.rate).toLocaleString()}</span>
-                          )}
+                          <input
+                            type="number"
+                            value={getFieldValue(line.id, "rate", line)}
+                            onChange={(e) => handleFieldChange(line.id, "rate", e.target.value)}
+                            onBlur={() => handleFieldBlur(line.id, "rate")}
+                            className="w-20 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                            step="1"
+                            min="0"
+                          />
                         </td>
                         {project.ruleset === "FLAT_RATE" ? (
                           <>
                             <td className="px-3 py-2 text-center border-r border-gray-300">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={getInputValue("ot1_5")}
-                                  onChange={(e) => updateEditValue("ot1_5", e.target.value)}
-                                  onKeyDown={(e) => handleKeyDown(e, line.id)}
-                                  disabled={isSaving}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                                  step="0.5"
-                                  min="0"
-                                />
-                              ) : (
-                                <span>{Number(line.ot1_5) || "-"}</span>
-                              )}
+                              <input
+                                type="number"
+                                value={getFieldValue(line.id, "ot1_5", line)}
+                                onChange={(e) => handleFieldChange(line.id, "ot1_5", e.target.value)}
+                                onBlur={() => handleFieldBlur(line.id, "ot1_5")}
+                                className="w-16 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                                step="0.5"
+                                min="0"
+                              />
                             </td>
                             <td className="px-3 py-2 text-center border-r border-gray-300">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={getInputValue("ot2")}
-                                  onChange={(e) => updateEditValue("ot2", e.target.value)}
-                                  onKeyDown={(e) => handleKeyDown(e, line.id)}
-                                  disabled={isSaving}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                                  step="0.5"
-                                  min="0"
-                                />
-                              ) : (
-                                <span>{Number(line.ot2) || "-"}</span>
-                              )}
+                              <input
+                                type="number"
+                                value={getFieldValue(line.id, "ot2", line)}
+                                onChange={(e) => handleFieldChange(line.id, "ot2", e.target.value)}
+                                onBlur={() => handleFieldBlur(line.id, "ot2")}
+                                className="w-16 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                                step="0.5"
+                                min="0"
+                              />
                             </td>
                             <td className="px-3 py-2 text-center border-r border-gray-300">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={getInputValue("ot2_5")}
-                                  onChange={(e) => updateEditValue("ot2_5", e.target.value)}
-                                  onKeyDown={(e) => handleKeyDown(e, line.id)}
-                                  disabled={isSaving}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                                  step="0.5"
-                                  min="0"
-                                />
-                              ) : (
-                                <span>{Number(line.ot2_5) || "-"}</span>
-                              )}
+                              <input
+                                type="number"
+                                value={getFieldValue(line.id, "ot2_5", line)}
+                                onChange={(e) => handleFieldChange(line.id, "ot2_5", e.target.value)}
+                                onBlur={() => handleFieldBlur(line.id, "ot2_5")}
+                                className="w-16 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                                step="0.5"
+                                min="0"
+                              />
                             </td>
                           </>
                         ) : (
                           <>
                             <td className="px-3 py-2 text-center border-r border-gray-300">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={getInputValue("otHours")}
-                                  onChange={(e) => updateEditValue("otHours", e.target.value)}
-                                  onKeyDown={(e) => handleKeyDown(e, line.id)}
-                                  disabled={isSaving}
-                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                                  step="0.5"
-                                  min="0"
-                                />
-                              ) : (
-                                <span>{Number(line.otHours) || "-"}</span>
-                              )}
+                              <input
+                                type="number"
+                                value={getFieldValue(line.id, "otHours", line)}
+                                onChange={(e) => handleFieldChange(line.id, "otHours", e.target.value)}
+                                onBlur={() => handleFieldBlur(line.id, "otHours")}
+                                className="w-20 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                                step="0.5"
+                                min="0"
+                              />
                             </td>
                             <td className="px-3 py-2 text-center border-r border-gray-300">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={getInputValue("midnightHours")}
-                                  onChange={(e) => updateEditValue("midnightHours", e.target.value)}
-                                  onKeyDown={(e) => handleKeyDown(e, line.id)}
-                                  disabled={isSaving}
-                                  className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                                  step="0.5"
-                                  min="0"
-                                />
-                              ) : (
-                                <span>{Number(line.midnightHours) || "-"}</span>
-                              )}
+                              <input
+                                type="number"
+                                value={getFieldValue(line.id, "midnightHours", line)}
+                                onChange={(e) => handleFieldChange(line.id, "midnightHours", e.target.value)}
+                                onBlur={() => handleFieldBlur(line.id, "midnightHours")}
+                                className="w-24 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                                step="0.5"
+                                min="0"
+                              />
                             </td>
                           </>
                         )}
                         <td className="px-3 py-2 text-right font-semibold border-r border-gray-300">
-                          ${displayEstimate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${Number(line.estimate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="px-3 py-2">
-                          {isEditing ? (
-                            <div className="flex items-center justify-center gap-1">
+                        <td className="px-3 py-2 text-xs border-r border-gray-300">
+                          <select
+                            value={line.fringeRuleId || ""}
+                            onChange={async (e) => {
+                              const fringeRuleId = e.target.value || null;
+                              await onAssignFringe(line.id, fringeRuleId);
+                            }}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
+                          >
+                            <option value="">None</option>
+                            {project.fringeRules.map((rule) => (
+                              <option key={rule.id} value={rule.id}>
+                                {rule.name} ({rule.percentage}%)
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2 relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === line.id ? null : line.id);
+                            }}
+                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {/* Dropdown Menu */}
+                          {openMenuId === line.id && (
+                            <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
                               <button
-                                onClick={() => handleSave(line.id)}
-                                disabled={isSaving}
-                                className="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
-                                title="Save"
+                                onClick={() => handleDuplicate(line.id)}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                               >
-                                <Check className="w-4 h-4" />
+                                <Copy className="w-4 h-4" />
+                                Duplicate
                               </button>
                               <button
-                                onClick={handleCancel}
-                                disabled={isSaving}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-                                title="Cancel"
+                                onClick={() => handleDelete(line.id)}
+                                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                               >
-                                <X className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
+                                Delete
                               </button>
                             </div>
-                          ) : (
-                            <button
-                              onClick={() => handleEditClick(line)}
-                              className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
-                            >
-                              Edit
-                            </button>
                           )}
                         </td>
                       </tr>
@@ -805,6 +1026,7 @@ function EstimateTab({
                       <td className="px-3 py-2 text-right font-bold text-gray-900 border-r border-gray-300">
                         ${categorySubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
+                      <td className="px-3 py-2 border-r border-gray-300"></td>
                       <td className="px-3 py-2"></td>
                     </tr>
                   </React.Fragment>
@@ -839,6 +1061,12 @@ function RunningTab({
   invoices,
   contacts,
   projectCode,
+  insurancePercent,
+  productionFeePercent,
+  lineItemsSubtotal,
+  insuranceAmount,
+  productionFeeAmount,
+  totalEstimate,
   onAssignPayee,
   onUpdateRunningAmount,
 }: {
@@ -850,13 +1078,17 @@ function RunningTab({
   invoices: InvoiceData[];
   contacts: ContactData[];
   projectCode: string | null;
+  insurancePercent: number;
+  productionFeePercent: number;
+  lineItemsSubtotal: number;
+  insuranceAmount: number;
+  productionFeeAmount: number;
+  totalEstimate: number;
   onAssignPayee: (budgetLineId: string, payeeId: string | null) => Promise<void>;
   onUpdateRunningAmount: (budgetLineId: string, amount: number | null) => Promise<void>;
 }) {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
-  const [editingRunningId, setEditingRunningId] = useState<string | null>(null);
-  const [runningValue, setRunningValue] = useState<string>("");
-  const [isSavingRunning, setIsSavingRunning] = useState(false);
+  const [localRunningValues, setLocalRunningValues] = useState<Record<string, string>>({});
 
   // Helper function to check if a line has any filled data
   const hasFilledData = (line: BudgetLineData) => {
@@ -878,34 +1110,47 @@ function RunningTab({
     setEditingLineId(null);
   };
 
-  const handleRunningClick = (line: BudgetLineData) => {
-    setEditingRunningId(line.id);
-    setRunningValue(line.runningAmount ? String(line.runningAmount) : "");
-  };
-
-  const handleRunningChange = async (budgetLineId: string) => {
-    const amount = runningValue === "" ? null : parseFloat(runningValue);
-    if (runningValue !== "" && amount !== null && (isNaN(amount) || amount < 0)) {
-      return; // Invalid input, don't save
+  // Get current value for running field (local or from line data)
+  const getRunningValue = (lineId: string, line: BudgetLineData): string => {
+    if (localRunningValues[lineId] !== undefined) {
+      return localRunningValues[lineId];
     }
-
-    setIsSavingRunning(true);
-    await onUpdateRunningAmount(budgetLineId, amount);
-    setIsSavingRunning(false);
-    setEditingRunningId(null);
-    setRunningValue("");
+    return line.runningAmount ? String(line.runningAmount) : "";
   };
 
-  const handleCancelRunning = () => {
-    setEditingRunningId(null);
-    setRunningValue("");
+  // Handle running field change (update local state)
+  const handleRunningChange = (lineId: string, value: string) => {
+    setLocalRunningValues((prev) => ({
+      ...prev,
+      [lineId]: value,
+    }));
   };
 
-  const handleRunningKeyDown = (e: React.KeyboardEvent, budgetLineId: string) => {
-    if (e.key === "Enter") {
-      handleRunningChange(budgetLineId);
-    } else if (e.key === "Escape") {
-      handleCancelRunning();
+  // Handle running field blur (save to server)
+  const handleRunningBlur = async (lineId: string) => {
+    if (localRunningValues[lineId] !== undefined) {
+      const value = localRunningValues[lineId];
+      const amount = value === "" ? null : parseFloat(value);
+
+      // Only save if valid
+      if (value !== "" && amount !== null && (isNaN(amount) || amount < 0)) {
+        // Invalid input - revert to original
+        setLocalRunningValues((prev) => {
+          const newValues = { ...prev };
+          delete newValues[lineId];
+          return newValues;
+        });
+        return;
+      }
+
+      await onUpdateRunningAmount(lineId, amount);
+
+      // Clear local state after save
+      setLocalRunningValues((prev) => {
+        const newValues = { ...prev };
+        delete newValues[lineId];
+        return newValues;
+      });
     }
   };
 
@@ -985,6 +1230,7 @@ function RunningTab({
                   <th className="px-3 py-2 text-left font-semibold text-gray-700 w-12 border-r border-gray-300"></th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700 border-r border-gray-300"></th>
                   <th className="px-3 py-2 text-center font-semibold text-gray-700 w-32 border-r border-gray-300">Payee</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 w-32 border-r border-gray-300">Fringe</th>
                 <th className="px-3 py-2 text-center font-semibold text-gray-700 w-32 border-r border-gray-300">Invoice Status</th>
                 <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Running</th>
                 <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Estimated</th>
@@ -1015,7 +1261,7 @@ function RunningTab({
                     {/* Category Header Row */}
                     <tr className="bg-gray-50 border-t border-gray-300">
                       <td className="px-3 py-2 font-semibold text-gray-700 border-r border-gray-300">{categoryLetter}</td>
-                      <td colSpan={7} className="px-3 py-2 font-semibold text-gray-700">
+                      <td colSpan={8} className="px-3 py-2 font-semibold text-gray-700">
                         {category}
                       </td>
                     </tr>
@@ -1056,6 +1302,11 @@ function RunningTab({
                             </button>
                           )}
                         </td>
+                        <td className="px-3 py-2 text-xs border-r border-gray-300">
+                          <span className="text-gray-900">
+                            {line.fringeRule ? `${line.fringeRule.name} (${line.fringeRule.percentage}%)` : "-"}
+                          </span>
+                        </td>
                         <td className="px-3 py-2 text-center border-r border-gray-300">
                           {hasInvoices ? (
                             <Link
@@ -1084,45 +1335,16 @@ function RunningTab({
                           )}
                         </td>
                         <td className="px-3 py-2 text-center border-r border-gray-300">
-                          {editingRunningId === line.id ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <input
-                                type="number"
-                                value={runningValue}
-                                onChange={(e) => setRunningValue(e.target.value)}
-                                onKeyDown={(e) => handleRunningKeyDown(e, line.id)}
-                                autoFocus
-                                step="0.01"
-                                min="0"
-                                placeholder="0.00"
-                                disabled={isSavingRunning}
-                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
-                              />
-                              <button
-                                onClick={() => handleRunningChange(line.id)}
-                                disabled={isSavingRunning}
-                                className="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
-                                title="Save"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={handleCancelRunning}
-                                disabled={isSavingRunning}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-                                title="Cancel"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleRunningClick(line)}
-                              className="text-gray-700 hover:text-purple-600 hover:underline cursor-pointer"
-                            >
-                              {line.runningAmount ? `$${Number(line.runningAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "-"}
-                            </button>
-                          )}
+                          <input
+                            type="number"
+                            value={getRunningValue(line.id, line)}
+                            onChange={(e) => handleRunningChange(line.id, e.target.value)}
+                            onBlur={() => handleRunningBlur(line.id)}
+                            className="w-24 px-2 py-1 border border-transparent hover:border-gray-300 rounded text-sm text-center focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                          />
                         </td>
                         <td className="px-3 py-2 text-center border-r border-gray-300">
                           ${Number(line.estimate).toLocaleString("en-US", { minimumFractionDigits: 2 })}
@@ -1140,7 +1362,7 @@ function RunningTab({
                     {/* Category Subtotal Row */}
                     <tr className="bg-gray-100 border-t-2 border-gray-400">
                       <td className="px-3 py-2 border-r border-gray-300"></td>
-                      <td colSpan={3} className="px-3 py-2 text-right font-semibold text-gray-700">
+                      <td colSpan={4} className="px-3 py-2 text-right font-semibold text-gray-700">
                         Subtotal:
                       </td>
                       <td className="px-3 py-2 border-r border-gray-300"></td>

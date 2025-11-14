@@ -27,20 +27,23 @@ enum UserRole {
 }
 
 model Project {
-  id          String        @id @default(cuid())
-  name        String
-  projectCode String        // Producer-assigned unique identifier for invoice matching
-  clientName  String?
-  status      ProjectStatus @default(PLANNING)
-  ruleset     BudgetRuleset @default(FLAT_RATE) // APA or FlatRate calculation rules
-  totalBudget Decimal       @default(0) @db.Decimal(12, 2)
-  totalSpent  Decimal       @default(0) @db.Decimal(12, 2)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  userId      String
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  budgetLines BudgetLine[]
-  invoices    Invoice[]
+  id                  String        @id @default(cuid())
+  name                String
+  projectCode         String        // Producer-assigned unique identifier for invoice matching
+  clientName          String?
+  status              ProjectStatus @default(PLANNING)
+  ruleset             BudgetRuleset @default(FLAT_RATE) // APA or FlatRate calculation rules
+  totalBudget         Decimal       @default(0) @db.Decimal(12, 2)
+  totalSpent          Decimal       @default(0) @db.Decimal(12, 2)
+  insurancePercent    Decimal       @default(0) @db.Decimal(5, 2) // Insurance % (0-100)
+  productionFeePercent Decimal      @default(0) @db.Decimal(5, 2) // Production Fee/Markup % (0-100)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  userId              String
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetLines         BudgetLine[]
+  invoices            Invoice[]
+  fringeRules         FringeRule[]
 
   @@unique([userId, projectCode]) // Unique per user for invoice auto-matching
   @@index([projectCode]) // Indexed for fast lookup
@@ -103,6 +106,8 @@ model BudgetLine {
   project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   payeeId       String?
   payee         Contact?       @relation("BudgetLinePayee", fields: [payeeId], references: [id], onDelete: SetNull)
+  fringeRuleId  String?
+  fringeRule    FringeRule?    @relation(fields: [fringeRuleId], references: [id], onDelete: SetNull)
   invoices      Invoice[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -110,6 +115,20 @@ model BudgetLine {
   @@index([projectId])
   @@index([payeeId])
   @@index([category])
+  @@index([fringeRuleId])
+}
+
+model FringeRule {
+  id          String       @id @default(cuid())
+  name        String       // e.g., "Fringe A", "Fringe B"
+  percentage  Decimal      @db.Decimal(5, 2) // Percentage (0-100)
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budgetLines BudgetLine[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([projectId])
 }
 
 model Invoice {
