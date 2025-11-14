@@ -14,6 +14,7 @@ interface ProjectData {
   name: string;
   clientName: string | null;
   projectCode: string | null;
+  ruleset: string;
   totalBudget: number;
   totalSpent: number;
   budgetLines: BudgetLineData[];
@@ -31,6 +32,8 @@ interface BudgetLineData {
   ot1_5: number | null;
   ot2: number | null;
   ot2_5: number | null;
+  otHours: number | null;
+  midnightHours: number | null;
   estimate: number;
   runningAmount: number | null;
   actualSpent: number;
@@ -140,22 +143,66 @@ export default function ProjectDetailPage() {
       doc.text(category, 14, yPosition);
       yPosition += 6;
 
-      // Table data
-      const tableData = lines.map((line: BudgetLineData) => [
-        line.lineNumber,
-        line.name,
-        Number(line.quantity) || "-",
-        Number(line.days) || "-",
-        `$${Number(line.rate).toLocaleString()}`,
-        Number(line.ot1_5) || "-",
-        Number(line.ot2) || "-",
-        Number(line.ot2_5) || "-",
-        `$${Number(line.estimate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      ]);
+      // Table data - conditional OT columns based on ruleset
+      const tableData = lines.map((line: BudgetLineData) => {
+        const baseData = [
+          line.lineNumber,
+          line.name,
+          Number(line.quantity) || "-",
+          Number(line.days) || "-",
+          `$${Number(line.rate).toLocaleString()}`,
+        ];
+
+        if (project.ruleset === "FLAT_RATE") {
+          return [
+            ...baseData,
+            Number(line.ot1_5) || "-",
+            Number(line.ot2) || "-",
+            Number(line.ot2_5) || "-",
+            `$${Number(line.estimate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          ];
+        } else {
+          return [
+            ...baseData,
+            Number(line.otHours) || "-",
+            Number(line.midnightHours) || "-",
+            `$${Number(line.estimate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          ];
+        }
+      });
+
+      // Conditional header based on ruleset
+      const headerRow = project.ruleset === "FLAT_RATE"
+        ? [["#", "Item", "No", "Days", "Rate", "1.5 OT", "2 OT", "2.5 OT", "Estimate"]]
+        : [["#", "Item", "No", "Days", "Rate", "OT Hours", "Midnight Hours", "Estimate"]];
+
+      // Conditional column styles based on ruleset
+      const columnStyles = project.ruleset === "FLAT_RATE"
+        ? {
+            0: { cellWidth: 10, halign: "center" as const },
+            1: { cellWidth: 50 },
+            2: { cellWidth: 15, halign: "center" as const },
+            3: { cellWidth: 15, halign: "center" as const },
+            4: { cellWidth: 20, halign: "right" as const },
+            5: { cellWidth: 15, halign: "center" as const },
+            6: { cellWidth: 15, halign: "center" as const },
+            7: { cellWidth: 15, halign: "center" as const },
+            8: { cellWidth: 30, halign: "right" as const, fontStyle: "bold" },
+          }
+        : {
+            0: { cellWidth: 10, halign: "center" as const },
+            1: { cellWidth: 50 },
+            2: { cellWidth: 15, halign: "center" as const },
+            3: { cellWidth: 15, halign: "center" as const },
+            4: { cellWidth: 20, halign: "right" as const },
+            5: { cellWidth: 20, halign: "center" as const },
+            6: { cellWidth: 25, halign: "center" as const },
+            7: { cellWidth: 30, halign: "right" as const, fontStyle: "bold" },
+          };
 
       autoTable(doc, {
         startY: yPosition,
-        head: [["#", "Item", "No", "Days", "Rate", "1.5 OT", "2 OT", "2.5 OT", "Estimate"]],
+        head: headerRow,
         body: tableData,
         theme: "grid",
         headStyles: {
@@ -167,17 +214,7 @@ export default function ProjectDetailPage() {
         bodyStyles: {
           fontSize: 9,
         },
-        columnStyles: {
-          0: { cellWidth: 10, halign: "center" },
-          1: { cellWidth: 50 },
-          2: { cellWidth: 15, halign: "center" },
-          3: { cellWidth: 15, halign: "center" },
-          4: { cellWidth: 20, halign: "right" },
-          5: { cellWidth: 15, halign: "center" },
-          6: { cellWidth: 15, halign: "center" },
-          7: { cellWidth: 15, halign: "center" },
-          8: { cellWidth: 30, halign: "right", fontStyle: "bold" },
-        },
+        columnStyles,
         margin: { left: 14 },
       });
 
@@ -233,7 +270,16 @@ export default function ProjectDetailPage() {
 
       <div className="flex justify-between items-start mb-8">
         <div className="flex-1">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{project.name}</h1>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
+            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+              project.ruleset === "APA"
+                ? "bg-purple-100 text-purple-700"
+                : "bg-blue-100 text-blue-700"
+            }`}>
+              {project.ruleset === "APA" ? "APA Ruleset" : "Flat Rate"}
+            </span>
+          </div>
           {project.clientName && (
             <p className="text-gray-500">Client: {project.clientName}</p>
           )}
@@ -289,6 +335,7 @@ export default function ProjectDetailPage() {
             <EstimateTab
               projectId={params.id as string}
               activeTab={activeTab}
+              project={project}
               groupedLines={groupedLines}
               categories={categories}
               onUpdateFields={async (budgetLineId, fields) => {
@@ -305,6 +352,7 @@ export default function ProjectDetailPage() {
             <RunningTab
               projectId={params.id as string}
               activeTab={activeTab}
+              project={project}
               groupedLines={groupedLines}
               categories={categories}
               invoices={project.invoices}
@@ -329,6 +377,7 @@ export default function ProjectDetailPage() {
 function EstimateTab({
   projectId,
   activeTab,
+  project,
   groupedLines,
   categories,
   onUpdateFields,
@@ -337,6 +386,7 @@ function EstimateTab({
 }: {
   projectId: string;
   activeTab: string;
+  project: ProjectData;
   groupedLines: Record<string, BudgetLineData[]>;
   categories: string[];
   onUpdateFields: (budgetLineId: string, fields: Record<string, unknown>) => Promise<void>;
@@ -355,7 +405,9 @@ function EstimateTab({
       line.rate != null ||
       line.ot1_5 != null ||
       line.ot2 != null ||
-      line.ot2_5 != null
+      line.ot2_5 != null ||
+      line.otHours != null ||
+      line.midnightHours != null
     );
   };
 
@@ -369,6 +421,8 @@ function EstimateTab({
       ot1_5: line.ot1_5 || 0,
       ot2: line.ot2 || 0,
       ot2_5: line.ot2_5 || 0,
+      otHours: line.otHours || 0,
+      midnightHours: line.midnightHours || 0,
     });
   };
 
@@ -422,27 +476,36 @@ function EstimateTab({
     <div>
       {/* Tab Controls and Add Line */}
       <div className="mb-6 flex justify-between items-center">
-        <div className="inline-flex bg-gray-100 rounded-lg p-1">
-          <Link
-            href={`/projects/${projectId}?tab=estimate`}
-            className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
-              activeTab === "estimate"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Estimate
-          </Link>
-          <Link
-            href={`/projects/${projectId}?tab=running`}
-            className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
-              activeTab === "running"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Running
-          </Link>
+        <div className="flex items-center gap-3">
+          <div className="inline-flex bg-gray-100 rounded-lg p-1">
+            <Link
+              href={`/projects/${projectId}?tab=estimate`}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+                activeTab === "estimate"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Estimate
+            </Link>
+            <Link
+              href={`/projects/${projectId}?tab=running`}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+                activeTab === "running"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Running
+            </Link>
+          </div>
+          <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+            project.ruleset === "APA"
+              ? "bg-purple-100 text-purple-700"
+              : "bg-blue-100 text-blue-700"
+          }`}>
+            {project.ruleset === "APA" ? "APA Rules Applied" : "Flat Rate Rules Applied"}
+          </span>
         </div>
         <select
           onChange={(e) => {
@@ -500,9 +563,18 @@ function EstimateTab({
                 <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">No</th>
                 <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">Days</th>
                 <th className="px-3 py-2 text-center font-semibold text-gray-700 w-24 border-r border-gray-300">Rate</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">1.5 OT</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2 OT</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2.5 OT</th>
+                {project.ruleset === "FLAT_RATE" ? (
+                  <>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">1.5 OT</th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2 OT</th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2.5 OT</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-24 border-r border-gray-300">OT Hours</th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-28 border-r border-gray-300">Midnight Hours</th>
+                  </>
+                )}
                 <th className="px-3 py-2 text-right font-semibold text-gray-700 w-32 border-r border-gray-300">Estimate</th>
                 <th className="px-3 py-2 w-20"></th>
               </tr>
@@ -515,6 +587,11 @@ function EstimateTab({
                 // Don't show category if no filled lines
                 if (filledLines.length === 0) return null;
                 const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
+
+                // Calculate category subtotal
+                const categorySubtotal = filledLines.reduce((sum, line) => {
+                  return sum + Number(line.estimate);
+                }, 0);
 
                 return (
                   <React.Fragment key={category}>
@@ -596,54 +673,93 @@ function EstimateTab({
                             <span>${Number(line.rate).toLocaleString()}</span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-center border-r border-gray-300">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={getInputValue("ot1_5")}
-                              onChange={(e) => updateEditValue("ot1_5", e.target.value)}
-                              onKeyDown={(e) => handleKeyDown(e, line.id)}
-                              disabled={isSaving}
-                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                              step="0.5"
-                              min="0"
-                            />
-                          ) : (
-                            <span>{Number(line.ot1_5) || "-"}</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-center border-r border-gray-300">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={getInputValue("ot2")}
-                              onChange={(e) => updateEditValue("ot2", e.target.value)}
-                              onKeyDown={(e) => handleKeyDown(e, line.id)}
-                              disabled={isSaving}
-                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                              step="0.5"
-                              min="0"
-                            />
-                          ) : (
-                            <span>{Number(line.ot2) || "-"}</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-center border-r border-gray-300">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={getInputValue("ot2_5")}
-                              onChange={(e) => updateEditValue("ot2_5", e.target.value)}
-                              onKeyDown={(e) => handleKeyDown(e, line.id)}
-                              disabled={isSaving}
-                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                              step="0.5"
-                              min="0"
-                            />
-                          ) : (
-                            <span>{Number(line.ot2_5) || "-"}</span>
-                          )}
-                        </td>
+                        {project.ruleset === "FLAT_RATE" ? (
+                          <>
+                            <td className="px-3 py-2 text-center border-r border-gray-300">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={getInputValue("ot1_5")}
+                                  onChange={(e) => updateEditValue("ot1_5", e.target.value)}
+                                  onKeyDown={(e) => handleKeyDown(e, line.id)}
+                                  disabled={isSaving}
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                                  step="0.5"
+                                  min="0"
+                                />
+                              ) : (
+                                <span>{Number(line.ot1_5) || "-"}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-center border-r border-gray-300">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={getInputValue("ot2")}
+                                  onChange={(e) => updateEditValue("ot2", e.target.value)}
+                                  onKeyDown={(e) => handleKeyDown(e, line.id)}
+                                  disabled={isSaving}
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                                  step="0.5"
+                                  min="0"
+                                />
+                              ) : (
+                                <span>{Number(line.ot2) || "-"}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-center border-r border-gray-300">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={getInputValue("ot2_5")}
+                                  onChange={(e) => updateEditValue("ot2_5", e.target.value)}
+                                  onKeyDown={(e) => handleKeyDown(e, line.id)}
+                                  disabled={isSaving}
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                                  step="0.5"
+                                  min="0"
+                                />
+                              ) : (
+                                <span>{Number(line.ot2_5) || "-"}</span>
+                              )}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-3 py-2 text-center border-r border-gray-300">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={getInputValue("otHours")}
+                                  onChange={(e) => updateEditValue("otHours", e.target.value)}
+                                  onKeyDown={(e) => handleKeyDown(e, line.id)}
+                                  disabled={isSaving}
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                                  step="0.5"
+                                  min="0"
+                                />
+                              ) : (
+                                <span>{Number(line.otHours) || "-"}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-center border-r border-gray-300">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={getInputValue("midnightHours")}
+                                  onChange={(e) => updateEditValue("midnightHours", e.target.value)}
+                                  onKeyDown={(e) => handleKeyDown(e, line.id)}
+                                  disabled={isSaving}
+                                  className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                                  step="0.5"
+                                  min="0"
+                                />
+                              ) : (
+                                <span>{Number(line.midnightHours) || "-"}</span>
+                              )}
+                            </td>
+                          </>
+                        )}
                         <td className="px-3 py-2 text-right font-semibold border-r border-gray-300">
                           ${displayEstimate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
@@ -679,6 +795,18 @@ function EstimateTab({
                       </tr>
                     );
                     })}
+
+                    {/* Category Subtotal Row */}
+                    <tr className="bg-gray-100 border-t-2 border-gray-400">
+                      <td className="px-3 py-2 border-r border-gray-300"></td>
+                      <td colSpan={project.ruleset === "FLAT_RATE" ? 6 : 6} className="px-3 py-2 text-right font-semibold text-gray-700">
+                        Subtotal:
+                      </td>
+                      <td className="px-3 py-2 text-right font-bold text-gray-900 border-r border-gray-300">
+                        ${categorySubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-2"></td>
+                    </tr>
                   </React.Fragment>
                 );
               })}
@@ -705,6 +833,7 @@ function EstimateTab({
 function RunningTab({
   projectId,
   activeTab,
+  project,
   groupedLines,
   categories,
   invoices,
@@ -715,6 +844,7 @@ function RunningTab({
 }: {
   projectId: string;
   activeTab: string;
+  project: ProjectData;
   groupedLines: Record<string, BudgetLineData[]>;
   categories: string[];
   invoices: InvoiceData[];
@@ -736,7 +866,9 @@ function RunningTab({
       line.rate != null ||
       line.ot1_5 != null ||
       line.ot2 != null ||
-      line.ot2_5 != null
+      line.ot2_5 != null ||
+      line.otHours != null ||
+      line.midnightHours != null
     );
   };
 
@@ -780,7 +912,7 @@ function RunningTab({
   return (
     <div>
       {/* Tab Controls */}
-      <div className="mb-6">
+      <div className="mb-6 flex items-center gap-3">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">
           <Link
             href={`/projects/${projectId}?tab=estimate`}
@@ -803,6 +935,13 @@ function RunningTab({
             Running
           </Link>
         </div>
+        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+          project.ruleset === "APA"
+            ? "bg-purple-100 text-purple-700"
+            : "bg-blue-100 text-blue-700"
+        }`}>
+          {project.ruleset === "APA" ? "APA Rules Applied" : "Flat Rate Rules Applied"}
+        </span>
       </div>
 
       {/* Check if there are any filled lines across all categories */}
@@ -861,6 +1000,15 @@ function RunningTab({
                 // Don't show category if no filled lines
                 if (filledLines.length === 0) return null;
                 const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C
+
+                // Calculate category subtotals
+                const categoryEstimateSubtotal = filledLines.reduce((sum, line) => {
+                  return sum + Number(line.estimate);
+                }, 0);
+                const categoryActualSubtotal = filledLines.reduce((sum, line) => {
+                  return sum + Number(line.actualSpent);
+                }, 0);
+                const categoryVarianceSubtotal = categoryEstimateSubtotal - categoryActualSubtotal;
 
                 return (
                   <React.Fragment key={category}>
@@ -988,6 +1136,24 @@ function RunningTab({
                       </tr>
                     );
                     })}
+
+                    {/* Category Subtotal Row */}
+                    <tr className="bg-gray-100 border-t-2 border-gray-400">
+                      <td className="px-3 py-2 border-r border-gray-300"></td>
+                      <td colSpan={3} className="px-3 py-2 text-right font-semibold text-gray-700">
+                        Subtotal:
+                      </td>
+                      <td className="px-3 py-2 border-r border-gray-300"></td>
+                      <td className="px-3 py-2 text-center font-bold text-gray-900 border-r border-gray-300">
+                        ${categoryEstimateSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-2 text-center font-bold text-gray-900 border-r border-gray-300">
+                        {categoryActualSubtotal > 0 ? `$${categoryActualSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-bold ${categoryVarianceSubtotal >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {categoryActualSubtotal > 0 ? `$${Math.abs(categoryVarianceSubtotal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}
+                      </td>
+                    </tr>
                   </React.Fragment>
                 );
               })}

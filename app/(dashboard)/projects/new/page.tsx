@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createProject } from "@/app/actions/projects";
 import { getDefaultLineItemTemplates } from "@/app/actions/templates";
 import { useRouter } from "next/navigation";
+import { calculateEstimateWithRuleset } from "@/lib/utils";
 
 type BudgetLine = {
   id: string;
@@ -18,28 +19,16 @@ type BudgetLine = {
   ot1_5: number | null;
   ot2: number | null;
   ot2_5: number | null;
+  otHours?: number | null;
+  midnightHours?: number | null;
 };
-
-function calculateEstimate(line: BudgetLine): number {
-  const quantity = line.quantity ?? 1; // Default to 1 if null/undefined
-  const days = line.days ?? 0;
-  const rate = line.rate ?? 0;
-  const ot1_5 = line.ot1_5 ?? 0;
-  const ot2 = line.ot2 ?? 0;
-  const ot2_5 = line.ot2_5 ?? 0;
-
-  const baseAmount = quantity * days * rate;
-  const ot1_5Amount = ot1_5 * rate * 1.5;
-  const ot2Amount = ot2 * rate * 2;
-  const ot2_5Amount = ot2_5 * rate * 2.5;
-  return baseAmount + ot1_5Amount + ot2Amount + ot2_5Amount;
-}
 
 export default function NewProjectPage() {
   const router = useRouter();
   const [projectName, setProjectName] = useState("");
   const [projectCode, setProjectCode] = useState("");
   const [clientName, setClientName] = useState("");
+  const [ruleset, setRuleset] = useState<"FLAT_RATE" | "APA">("FLAT_RATE");
   const [budgetLines, setBudgetLines] = useState<BudgetLine[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +55,8 @@ export default function NewProjectPage() {
           ot1_5: null,
           ot2: null,
           ot2_5: null,
+          otHours: null,
+          midnightHours: null,
         }));
 
         setBudgetLines(lines);
@@ -116,6 +107,8 @@ export default function NewProjectPage() {
         ot1_5: null,
         ot2: null,
         ot2_5: null,
+        otHours: null,
+        midnightHours: null,
       },
     ]);
   };
@@ -124,7 +117,9 @@ export default function NewProjectPage() {
     setBudgetLines((lines) => lines.filter((line) => line.id !== id));
   };
 
-  const totalEstimate = budgetLines.reduce((sum, line) => sum + calculateEstimate(line), 0);
+  const totalEstimate = budgetLines.reduce((sum, line) => {
+    return sum + calculateEstimateWithRuleset(line, ruleset);
+  }, 0);
 
   // Group lines by category dynamically
   const groupedLines = budgetLines.reduce((acc, line) => {
@@ -156,6 +151,7 @@ export default function NewProjectPage() {
         name: projectName,
         projectCode: projectCode.trim(),
         clientName: clientName || "",
+        ruleset: ruleset,
         budgetLines: budgetLines.map((line) => ({
           category: line.category,
           lineNumber: line.lineNumber,
@@ -226,7 +222,7 @@ export default function NewProjectPage() {
           </div>
 
           {/* Project Code */}
-          <div className="mb-8">
+          <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Project Code *
             </label>
@@ -244,10 +240,43 @@ export default function NewProjectPage() {
             </p>
           </div>
 
+          {/* Budget Ruleset Selector */}
+          <div className="mb-8">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Budget Calculation Ruleset *
+            </label>
+            <select
+              value={ruleset}
+              onChange={(e) => setRuleset(e.target.value as "FLAT_RATE" | "APA")}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+              required
+            >
+              <option value="FLAT_RATE">Flat Rate (Traditional OT Calculation)</option>
+              <option value="APA">APA (Associated Production Agreement)</option>
+            </select>
+            <p className="mt-2 text-sm text-gray-500">
+              {ruleset === "FLAT_RATE"
+                ? "Standard overtime calculation using 1.5x, 2.0x, and 2.5x multipliers."
+                : "APA-compliant calculation using Base Hourly Rate (BHR) and tiered multipliers based on daily rate."}
+            </p>
+            <p className="mt-1 text-xs text-orange-600 font-medium">
+              ⚠️ This cannot be changed after project creation
+            </p>
+          </div>
+
           {/* Budget Breakdown */}
           <div className="mb-8">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Budget Breakdown</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-semibold">Budget Breakdown</h2>
+                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                  ruleset === "APA"
+                    ? "bg-purple-100 text-purple-700"
+                    : "bg-blue-100 text-blue-700"
+                }`}>
+                  {ruleset === "APA" ? "APA Rules Applied" : "Flat Rate Rules Applied"}
+                </span>
+              </div>
               <div className="flex gap-3 items-center">
                 <select
                   value={categoryFilter}
@@ -291,9 +320,18 @@ export default function NewProjectPage() {
                     <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">No</th>
                     <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">Days</th>
                     <th className="px-3 py-2 text-center font-semibold text-gray-700 w-24 border-r border-gray-300">Rate</th>
-                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">1.5 OT</th>
-                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2 OT</th>
-                    <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2.5 OT</th>
+                    {ruleset === "FLAT_RATE" ? (
+                      <>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">1.5 OT</th>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2 OT</th>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-700 w-20 border-r border-gray-300">2.5 OT</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-700 w-24 border-r border-gray-300">OT Hours</th>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-700 w-24 border-r border-gray-300">Midnight Hours</th>
+                      </>
+                    )}
                     <th className="px-3 py-2 text-right font-semibold text-gray-700 w-32 border-r border-gray-300">Estimate</th>
                     <th className="px-3 py-2 w-10"></th>
                   </tr>
@@ -317,6 +355,11 @@ export default function NewProjectPage() {
                       .map((category, catIndex) => {
                         const lines = groupedLines[category] || [];
                         const categoryLetter = String.fromCharCode(65 + catIndex); // A, B, C, etc.
+
+                        // Calculate category subtotal
+                        const categorySubtotal = lines.reduce((sum, line) => {
+                          return sum + calculateEstimateWithRuleset(line, ruleset);
+                        }, 0);
 
                     return (
                       <React.Fragment key={category}>
@@ -370,38 +413,65 @@ export default function NewProjectPage() {
                                 step="1"
                               />
                             </td>
-                            <td className="px-3 py-2 border-r border-gray-300">
-                              <input
-                                type="number"
-                                value={line.ot1_5 || ""}
-                                onChange={(e) => updateLine(line.id, "ot1_5", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
-                                min="0"
-                                step="0.5"
-                              />
-                            </td>
-                            <td className="px-3 py-2 border-r border-gray-300">
-                              <input
-                                type="number"
-                                value={line.ot2 || ""}
-                                onChange={(e) => updateLine(line.id, "ot2", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
-                                min="0"
-                                step="0.5"
-                              />
-                            </td>
-                            <td className="px-3 py-2 border-r border-gray-300">
-                              <input
-                                type="number"
-                                value={line.ot2_5 || ""}
-                                onChange={(e) => updateLine(line.id, "ot2_5", e.target.value)}
-                                className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
-                                min="0"
-                                step="0.5"
-                              />
-                            </td>
+                            {ruleset === "FLAT_RATE" ? (
+                              <>
+                                <td className="px-3 py-2 border-r border-gray-300">
+                                  <input
+                                    type="number"
+                                    value={line.ot1_5 || ""}
+                                    onChange={(e) => updateLine(line.id, "ot1_5", e.target.value)}
+                                    className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                    min="0"
+                                    step="0.5"
+                                  />
+                                </td>
+                                <td className="px-3 py-2 border-r border-gray-300">
+                                  <input
+                                    type="number"
+                                    value={line.ot2 || ""}
+                                    onChange={(e) => updateLine(line.id, "ot2", e.target.value)}
+                                    className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                    min="0"
+                                    step="0.5"
+                                  />
+                                </td>
+                                <td className="px-3 py-2 border-r border-gray-300">
+                                  <input
+                                    type="number"
+                                    value={line.ot2_5 || ""}
+                                    onChange={(e) => updateLine(line.id, "ot2_5", e.target.value)}
+                                    className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                    min="0"
+                                    step="0.5"
+                                  />
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="px-3 py-2 border-r border-gray-300">
+                                  <input
+                                    type="number"
+                                    value={line.otHours || ""}
+                                    onChange={(e) => updateLine(line.id, "otHours", e.target.value)}
+                                    className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                    min="0"
+                                    step="0.5"
+                                  />
+                                </td>
+                                <td className="px-3 py-2 border-r border-gray-300">
+                                  <input
+                                    type="number"
+                                    value={line.midnightHours || ""}
+                                    onChange={(e) => updateLine(line.id, "midnightHours", e.target.value)}
+                                    className="w-full text-center border-0 bg-transparent focus:ring-0 p-0 text-sm"
+                                    min="0"
+                                    step="0.5"
+                                  />
+                                </td>
+                              </>
+                            )}
                             <td className="px-3 py-2 text-right font-medium text-sm border-r border-gray-300">
-                              ${calculateEstimate(line).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              ${calculateEstimateWithRuleset(line, ruleset).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                             <td className="px-3 py-2">
                               <button
@@ -415,6 +485,18 @@ export default function NewProjectPage() {
                             </td>
                           </tr>
                         ))}
+
+                        {/* Category Subtotal Row */}
+                        <tr className="bg-gray-100 border-t-2 border-gray-400">
+                          <td className="px-3 py-2 border-r border-gray-300"></td>
+                          <td colSpan={ruleset === "FLAT_RATE" ? 6 : 6} className="px-3 py-2 text-right font-semibold text-gray-700">
+                            Subtotal:
+                          </td>
+                          <td className="px-3 py-2 text-right font-bold text-gray-900 border-r border-gray-300">
+                            ${categorySubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-3 py-2"></td>
+                        </tr>
                       </React.Fragment>
                     );
                       })

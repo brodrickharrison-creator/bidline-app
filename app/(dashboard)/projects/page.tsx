@@ -10,6 +10,7 @@ interface ProjectData {
   name: string;
   clientName: string | null;
   status: string;
+  ruleset: string;
   totalBudget: number;
   totalSpent: number;
 }
@@ -73,7 +74,16 @@ const ProjectCard = memo(({
 
       <div className="flex justify-between items-start mb-4 pr-8">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">{project.name}</h3>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
+            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+              project.ruleset === "APA"
+                ? "bg-purple-100 text-purple-700"
+                : "bg-blue-100 text-blue-700"
+            }`}>
+              {project.ruleset === "APA" ? "APA" : "Flat"}
+            </span>
+          </div>
           {project.clientName && (
             <p className="text-sm text-gray-500">Client: {project.clientName}</p>
           )}

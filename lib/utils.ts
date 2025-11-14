@@ -7,6 +7,7 @@
 
 import { BudgetLineInput } from "@/types";
 import { OVERTIME_MULTIPLIERS, CURRENCY_SYMBOL } from "./constants";
+import { getRuleset, LineItemData } from "./rulesets";
 
 // ============================================================================
 // CURRENCY FORMATTING
@@ -45,9 +46,10 @@ export function formatNumber(amount: number): string {
 // ============================================================================
 
 /**
- * Calculates the estimate for a single budget line item
+ * Calculates the estimate for a single budget line item (LEGACY - FlatRate only)
  * Formula: (days × rate) + (ot1.5 × rate × 1.5) + (ot2 × rate × 2) + (ot2.5 × rate × 2.5)
  *
+ * @deprecated Use calculateEstimateWithRuleset for new code
  * @param line - Budget line input with days, rate, and overtime values
  * @returns Total estimated cost for the line item
  */
@@ -70,6 +72,37 @@ export function calculateBudgetLineEstimate(line: {
   const overtime2_5 = ot2_5 * rate * OVERTIME_MULTIPLIERS.OT_2_5;
 
   return regularPay + overtime1_5 + overtime2 + overtime2_5;
+}
+
+/**
+ * Calculates estimate using the specified ruleset (FlatRate or APA)
+ * This is the preferred method for new code.
+ *
+ * @param line - Line item data
+ * @param rulesetName - Ruleset name ("FLAT_RATE" or "APA")
+ * @returns Total estimated cost using the specified ruleset
+ */
+export function calculateEstimateWithRuleset(
+  line: LineItemData,
+  rulesetName?: string | null
+): number {
+  const ruleset = getRuleset(rulesetName);
+  return ruleset.calculateEstimate(line);
+}
+
+/**
+ * Calculates overtime cost using the specified ruleset
+ *
+ * @param line - Line item data
+ * @param rulesetName - Ruleset name ("FLAT_RATE" or "APA")
+ * @returns Total overtime cost using the specified ruleset
+ */
+export function calculateOTWithRuleset(
+  line: LineItemData,
+  rulesetName?: string | null
+): number {
+  const ruleset = getRuleset(rulesetName);
+  return ruleset.calculateOT(line);
 }
 
 /**
@@ -204,4 +237,48 @@ export function isPositiveNumber(value: number): boolean {
 export function safeParseFloat(value: string | number): number {
   const parsed = typeof value === "string" ? parseFloat(value) : value;
   return isNaN(parsed) ? 0 : parsed;
+}
+
+// ============================================================================
+// APA RULESET UTILITIES
+// ============================================================================
+
+/**
+ * Determines if a line item has any filled data
+ * Used to filter out empty template lines in UI views
+ *
+ * @param line - Budget line with optional fields
+ * @returns True if at least one quantity/time/rate field is filled
+ */
+export function hasFilledData(line: {
+  quantity?: number | null;
+  days?: number | null;
+  rate?: number | null;
+  ot1_5?: number | null;
+  ot2?: number | null;
+  ot2_5?: number | null;
+  otHours?: number | null;
+  midnightHours?: number | null;
+}): boolean {
+  return !!(
+    line.quantity ||
+    line.days ||
+    line.rate ||
+    line.ot1_5 ||
+    line.ot2 ||
+    line.ot2_5 ||
+    line.otHours ||
+    line.midnightHours
+  );
+}
+
+/**
+ * Calculate APA Base Hourly Rate (BHR)
+ * Formula: rate / 10
+ *
+ * @param rate - Daily rate
+ * @returns Base Hourly Rate
+ */
+export function calculateBHR(rate: number): number {
+  return rate / 10;
 }

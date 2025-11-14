@@ -20,6 +20,7 @@ export async function createProject(formData: {
   projectCode: string;
   clientName: string;
   budgetLines: BudgetLineInput[];
+  ruleset?: string | null;
 }) {
   try {
     // Get authenticated user
@@ -71,6 +72,7 @@ export async function createProject(formData: {
         clientName: formData.clientName,
         totalBudget,
         status: "PLANNING",
+        ruleset: formData.ruleset || "FLAT_RATE",
         userId: user.id,
         budgetLines: {
           create: formData.budgetLines.map((line) => {
@@ -149,6 +151,7 @@ export async function getProjects() {
       name: project.name,
       clientName: project.clientName,
       status: project.status,
+      ruleset: project.ruleset,
       totalBudget: Number(project.totalBudget),
       totalSpent: Number(project.totalSpent),
       createdAt: project.createdAt,
@@ -219,6 +222,7 @@ export async function getProjectById(id: string) {
     // Convert Decimal to number for client component compatibility
     return {
       ...project,
+      ruleset: project.ruleset,
       totalBudget: Number(project.totalBudget),
       totalSpent: Number(project.totalSpent),
       budgetLines: project.budgetLines.map((line) => ({

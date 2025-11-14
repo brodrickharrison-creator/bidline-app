@@ -32,6 +32,7 @@ model Project {
   projectCode String        // Producer-assigned unique identifier for invoice matching
   clientName  String?
   status      ProjectStatus @default(PLANNING)
+  ruleset     BudgetRuleset @default(FLAT_RATE) // APA or FlatRate calculation rules
   totalBudget Decimal       @default(0) @db.Decimal(12, 2)
   totalSpent  Decimal       @default(0) @db.Decimal(12, 2)
   createdAt   DateTime      @default(now())
@@ -52,6 +53,17 @@ enum ProjectStatus {
   ARCHIVED
 }
 
+enum BudgetRuleset {
+  FLAT_RATE
+  APA
+}
+
+enum LineItemUnit {
+  DAY
+  HOUR
+  FLAT
+}
+
 model LineItemTemplate {
   id        String   @id @default(cuid())
   category  String
@@ -66,26 +78,34 @@ model LineItemTemplate {
 }
 
 model BudgetLine {
-  id            String    @id @default(cuid())
+  id            String         @id @default(cuid())
   category      String
   lineNumber    Int
   name          String
-  quantity      Decimal?  @db.Decimal(10, 2)
-  days          Decimal?  @db.Decimal(10, 2)
-  rate          Decimal?  @db.Decimal(10, 2)
-  ot1_5         Decimal?  @db.Decimal(10, 2)
-  ot2           Decimal?  @db.Decimal(10, 2)
-  ot2_5         Decimal?  @db.Decimal(10, 2)
-  estimate      Decimal   @default(0) @db.Decimal(12, 2)
-  runningAmount Decimal?  @db.Decimal(12, 2)
-  actualSpent   Decimal   @default(0) @db.Decimal(12, 2)
+  quantity      Decimal?       @db.Decimal(10, 2)
+  unit          LineItemUnit?  // Day, Hour, or Flat
+  days          Decimal?       @db.Decimal(10, 2)
+  rate          Decimal?       @db.Decimal(10, 2)
+  // FlatRate OT fields
+  ot1_5         Decimal?       @db.Decimal(10, 2)
+  ot2           Decimal?       @db.Decimal(10, 2)
+  ot2_5         Decimal?       @db.Decimal(10, 2)
+  // APA-specific OT fields
+  otHours       Decimal?       @db.Decimal(10, 2) // General OT hours for APA (uses tiered multiplier)
+  midnightHours Decimal?       @db.Decimal(10, 2) // Midnight OT hours (3.0x multiplier)
+  // Metadata for APA system
+  isAPA         Boolean        @default(false) // Indicates if this line uses APA rules
+  rateSource    String?        // "APA", "Custom", etc.
+  estimate      Decimal        @default(0) @db.Decimal(12, 2)
+  runningAmount Decimal?       @db.Decimal(12, 2)
+  actualSpent   Decimal        @default(0) @db.Decimal(12, 2)
   projectId     String
-  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   payeeId       String?
-  payee         Contact?  @relation("BudgetLinePayee", fields: [payeeId], references: [id], onDelete: SetNull)
+  payee         Contact?       @relation("BudgetLinePayee", fields: [payeeId], references: [id], onDelete: SetNull)
   invoices      Invoice[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@index([projectId])
   @@index([payeeId])
