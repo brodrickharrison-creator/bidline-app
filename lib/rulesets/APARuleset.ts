@@ -30,14 +30,15 @@ export class APARuleset implements BudgetRuleset {
 
   /**
    * Calculate total estimate for a line item
-   * Formula: (days × rate) + OT + Midnight OT
+   * Formula: (quantity × days × rate) + OT + Midnight OT
    */
   calculateEstimate(lineItem: LineItemData): number {
     const rate = lineItem.rate || 0;
+    const quantity = lineItem.quantity || 0;
     const days = lineItem.days || 0;
 
-    // Base amount (days × rate)
-    const baseAmount = days * rate;
+    // Base amount (quantity × days × rate)
+    const baseAmount = quantity * days * rate;
 
     // Calculate overtime
     const otAmount = this.calculateOT(lineItem);
@@ -48,11 +49,18 @@ export class APARuleset implements BudgetRuleset {
   /**
    * Calculate total overtime cost
    * Includes both general OT (tiered multiplier) and midnight OT (3.0x)
+   *
+   * Formula:
+   * - OT Total = No × OT Hours × (Rate ÷ 10) × OT Grade Multiplier
+   * - Midnight Total = No × Midnight Hours × (Rate ÷ 10) × 3
+   *
+   * Note: "No" represents number of people - each person worked the OT/midnight hours
    */
   calculateOT(lineItem: LineItemData): number {
     const rate = lineItem.rate || 0;
-    const otHours = lineItem.otHours || 0;
-    const midnightHours = lineItem.midnightHours || 0;
+    const quantity = lineItem.quantity || 0;  // Number of people
+    const otHours = lineItem.otHours || 0;  // Actual OT hours per person
+    const midnightHours = lineItem.midnightHours || 0;  // Midnight hours per person
 
     // Calculate BHR (Base Hourly Rate)
     const bhr = this.calculateBHR(rate);
@@ -60,11 +68,11 @@ export class APARuleset implements BudgetRuleset {
     // Get tiered multiplier based on rate
     const otMultiplier = this.getOTMultiplier(rate);
 
-    // Calculate general OT: otHours × BHR × multiplier
-    const generalOT = otHours * bhr * otMultiplier;
+    // Calculate general OT: No × OT Hours × BHR × OT Grade Multiplier
+    const generalOT = quantity * otHours * bhr * otMultiplier;
 
-    // Calculate midnight OT: midnightHours × BHR × 3.0
-    const midnightOT = midnightHours * bhr * APA_MIDNIGHT_MULTIPLIER;
+    // Calculate midnight OT: No × Midnight Hours × BHR × 3.0
+    const midnightOT = quantity * midnightHours * bhr * APA_MIDNIGHT_MULTIPLIER;
 
     return generalOT + midnightOT;
   }

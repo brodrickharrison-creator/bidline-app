@@ -10,6 +10,7 @@
  */
 export interface LineItemData {
   rate: number;
+  quantity?: number;  // Number of people/units
   days?: number;
   // FlatRate OT fields
   ot1_5?: number;  // Hours at 1.5x rate
